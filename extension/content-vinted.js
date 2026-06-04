@@ -1,5 +1,5 @@
 // VENTR Connect — Content script op Vinted
-// Toont zwevend panel en vult advertentieformulier automatisch in
+// Vult advertentieformulier automatisch in incl. dropdowns
 
 (function () {
   'use strict';
@@ -9,12 +9,9 @@
   let currentItem = null;
   let isPlacing = false;
 
-  // ── INIT ───────────────────────────────────────────────────────────────────
-
   function init() {
     loadQueue();
     injectPanel();
-    // Herladen queue elke 5 seconden
     setInterval(loadQueue, 5000);
   }
 
@@ -26,66 +23,53 @@
     });
   }
 
-  // ── PANEL UI ───────────────────────────────────────────────────────────────
+  // ── PANEL ──────────────────────────────────────────────────────────────────
 
   function injectPanel() {
     if (document.getElementById('ventr-panel')) return;
-
     panelEl = document.createElement('div');
     panelEl.id = 'ventr-panel';
     panelEl.innerHTML = `
       <div id="ventr-header">
-        <div id="ventr-logo">
-          <span class="ventr-dot"></span>VENTR
-        </div>
+        <div id="ventr-logo"><span class="ventr-dot"></span>VENTR</div>
         <div id="ventr-header-right">
           <span id="ventr-count-badge"></span>
           <button id="ventr-minimize">—</button>
         </div>
       </div>
       <div id="ventr-body">
-        <div id="ventr-empty">
-          Geen advertenties in wachtrij.<br>
-          Genereer ze op <a href="https://ventr.nl" target="_blank">ventr.nl</a> 🌸
-        </div>
+        <div id="ventr-empty">Geen advertenties in wachtrij.<br>Ga naar <a href="https://ventr.nl" target="_blank">ventr.nl</a> 🌸</div>
         <div id="ventr-list"></div>
         <div id="ventr-status"></div>
-      </div>
-    `;
+      </div>`;
     document.body.appendChild(panelEl);
 
-    // Minimize toggle
     let minimized = false;
     document.getElementById('ventr-minimize').addEventListener('click', () => {
       minimized = !minimized;
       document.getElementById('ventr-body').style.display = minimized ? 'none' : 'block';
       document.getElementById('ventr-minimize').textContent = minimized ? '+' : '—';
     });
-
     updatePanel();
   }
 
   function updatePanel() {
     if (!panelEl) return;
-
     const badge = document.getElementById('ventr-count-badge');
     const empty = document.getElementById('ventr-empty');
-    const list = document.getElementById('ventr-list');
-
+    const list  = document.getElementById('ventr-list');
     if (badge) badge.textContent = queue.length > 0 ? queue.length : '';
     if (empty) empty.style.display = queue.length === 0 ? 'block' : 'none';
     if (!list) return;
 
-    list.innerHTML = queue.map((item, i) => `
+    list.innerHTML = queue.map(item => `
       <div class="ventr-item ${currentItem?.id === item.id ? 'ventr-item-active' : ''}">
         <div class="ventr-item-photos">
-          ${item.photos.slice(0, 3).map(p =>
-            `<img src="${p.preview}" alt="">`
-          ).join('')}
+          ${(item.photos || []).slice(0, 3).map(p => `<img src="${p.preview || p}" alt="">`).join('')}
         </div>
         <div class="ventr-item-info">
-          <div class="ventr-item-title">${escHtml(item.listing.titel || '')}</div>
-          <div class="ventr-item-meta">€${item.listing.prijs} · ${escHtml(item.listing.staat || '')} · ${escHtml(item.listing.maat || '')}</div>
+          <div class="ventr-item-title">${esc(item.listing?.titel || '')}</div>
+          <div class="ventr-item-meta">€${item.listing?.prijs} · ${esc(item.listing?.staat || '')} · ${esc(item.listing?.maat || '')}</div>
         </div>
         <div class="ventr-item-actions">
           <button class="ventr-btn-place" data-id="${item.id}" ${isPlacing ? 'disabled' : ''}>
@@ -93,252 +77,255 @@
           </button>
           <button class="ventr-btn-remove" data-id="${item.id}" title="Verwijder">✕</button>
         </div>
-      </div>
-    `).join('');
+      </div>`).join('');
 
-    // Events
-    list.querySelectorAll('.ventr-btn-place').forEach(btn => {
-      btn.addEventListener('click', () => placeItem(btn.dataset.id));
-    });
-    list.querySelectorAll('.ventr-btn-remove').forEach(btn => {
+    list.querySelectorAll('.ventr-btn-place').forEach(btn =>
+      btn.addEventListener('click', () => placeItem(btn.dataset.id)));
+    list.querySelectorAll('.ventr-btn-remove').forEach(btn =>
       btn.addEventListener('click', () => {
         chrome.runtime.sendMessage({ type: 'VENTR_REMOVE_FROM_QUEUE', id: btn.dataset.id }, () => loadQueue());
-      });
-    });
+      }));
   }
 
   function setStatus(msg, type = 'info') {
     const el = document.getElementById('ventr-status');
-    if (el) {
-      el.textContent = msg;
-      el.className = 'ventr-status-' + type;
-    }
+    if (el) { el.textContent = msg; el.className = 'ventr-status-' + type; }
   }
 
-  // ── PLAATSEN FLOW ──────────────────────────────────────────────────────────
+  // ── PLAATSEN ────────────────────────────────────────────────────────────────
 
   async function placeItem(id) {
     const item = queue.find(q => q.id === id);
     if (!item || isPlacing) return;
+    currentItem = item; isPlacing = true; updatePanel();
 
-    currentItem = item;
-    isPlacing = true;
-    updatePanel();
+    const onPage = window.location.pathname.includes('/sell')
+      || window.location.pathname.includes('/items/new')
+      || window.location.pathname.includes('/verkopen')
+      || window.location.pathname.includes('/vendre');
+
+    if (!onPage) {
+      setStatus('Ga naar Vinted → Verkopen om te starten', 'warn');
+      isPlacing = false; currentItem = null; updatePanel(); return;
+    }
 
     try {
-      setStatus('Formulier zoeken...', 'info');
+      setStatus('📸 Foto\'s uploaden...', 'info');
+      await uploadPhotos(item.photos);
+      await sleep(2000);
 
-      // Wacht op Vinted formulier (navigate als nodig)
-      const onListingPage = window.location.pathname.includes('/items/new')
-        || window.location.pathname.includes('/sell')
-        || window.location.pathname.includes('/verkopen');
+      setStatus('✏️ Titel invullen...', 'info');
+      await fillInput(findTitle(), item.listing.titel?.slice(0, 60));
+      await sleep(300);
 
-      if (!onListingPage) {
-        setStatus('Ga naar Vinted → Verkopen om te beginnen', 'warn');
-        isPlacing = false;
-        updatePanel();
-        return;
-      }
+      setStatus('📝 Beschrijving invullen...', 'info');
+      await fillInput(findDescription(), item.listing.beschrijving);
+      await sleep(300);
 
-      await waitForForm();
+      setStatus('💶 Prijs invullen...', 'info');
+      await fillInput(findPrice(), String(item.listing.prijs));
+      await sleep(300);
 
-      setStatus('Foto\'s uploaden...', 'info');
-      const photosOk = await injectPhotos(item.photos);
-      if (!photosOk) setStatus('⚠️ Foto\'s handmatig uploaden', 'warn');
+      setStatus('🏷️ Staat selecteren...', 'info');
+      await fillDropdownByValue(findDropdown('staat|condition|conditie|zustand'), item.listing.staat);
+      await sleep(500);
 
-      await sleep(1500);
+      setStatus('📐 Maat selecteren...', 'info');
+      await fillDropdownByValue(findDropdown('maat|size|größe|taille'), item.listing.maat);
+      await sleep(500);
 
-      setStatus('Titel invullen...', 'info');
-      await fillTitle(item.listing.titel || '');
-      await sleep(400);
+      setStatus('🗂️ Categorie selecteren...', 'info');
+      await fillDropdownByValue(findDropdown('categorie|category|catégorie'), item.listing.categorie);
+      await sleep(500);
 
-      setStatus('Beschrijving invullen...', 'info');
-      await fillDescription(item.listing.beschrijving || '');
-      await sleep(400);
-
-      setStatus('Prijs invullen...', 'info');
-      await fillPrice(item.listing.prijs);
-      await sleep(400);
-
-      setStatus('Maat en staat invullen...', 'info');
-      await fillCondition(item.listing.staat);
-      await sleep(400);
-
-      setStatus('✅ Klaar — controleer en klik Publiceer!', 'success');
-
-      // Markeer als klaar in queue
-      await new Promise(res =>
-        chrome.runtime.sendMessage({ type: 'VENTR_MARK_DONE', id: item.id }, res)
-      );
+      setStatus('✅ Klaar! Controleer en klik Publiceer 🎉', 'success');
+      chrome.runtime.sendMessage({ type: 'VENTR_MARK_DONE', id: item.id });
 
     } catch (err) {
-      setStatus('❌ Fout: ' + err.message, 'error');
+      setStatus('❌ ' + err.message, 'error');
     }
 
-    isPlacing = false;
-    currentItem = null;
-    loadQueue();
-    updatePanel();
+    isPlacing = false; currentItem = null;
+    loadQueue(); updatePanel();
   }
 
-  // ── FORM HELPERS ───────────────────────────────────────────────────────────
-
-  async function waitForForm(maxMs = 8000) {
-    const start = Date.now();
-    while (Date.now() - start < maxMs) {
-      if (findTitle() || findDescription()) return true;
-      await sleep(300);
-    }
-    throw new Error('Formulier niet gevonden');
-  }
+  // ── FORMULIER HELPERS ──────────────────────────────────────────────────────
 
   function findEl(selectors) {
     for (const s of selectors) {
       const el = document.querySelector(s);
-      if (el) return el;
+      if (el && el.offsetParent !== null) return el; // moet zichtbaar zijn
     }
     return null;
   }
 
   function findTitle() {
     return findEl([
-      'input[data-testid*="title"]',
-      'input[name="title"]',
-      'input[placeholder*="titel"]',
-      'input[placeholder*="Title"]',
-      'input[id*="title"]',
-      'input[maxlength="60"]',
-      'input[maxlength="50"]',
+      'input[data-testid*="title"]', 'input[name="title"]',
+      'input[maxlength="60"]', 'input[maxlength="50"]',
+      'input[placeholder*="titel"]', 'input[placeholder*="title" i]',
     ]);
   }
 
   function findDescription() {
     return findEl([
-      'textarea[data-testid*="description"]',
-      'textarea[name="description"]',
-      'textarea[placeholder*="beschrijving"]',
-      'textarea[placeholder*="escription"]',
-      'textarea[id*="description"]',
+      'textarea[data-testid*="description"]', 'textarea[name="description"]',
+      'textarea[placeholder*="beschrijving" i]', 'textarea[placeholder*="description" i]',
+      'textarea',
     ]);
   }
 
   function findPrice() {
     return findEl([
-      'input[data-testid*="price"]',
-      'input[name="price"]',
-      'input[type="number"]',
-      'input[placeholder*="prijs"]',
-      'input[placeholder*="Price"]',
+      'input[data-testid*="price"]', 'input[name="price"]',
+      'input[type="number"]', 'input[placeholder*="prijs" i]',
+      'input[placeholder*="price" i]',
     ]);
   }
 
-  function findFileInput() {
+  function findDropdown(labelPattern) {
+    const re = new RegExp(labelPattern, 'i');
+    // Zoek label met matching tekst
+    const allLabels = [...document.querySelectorAll('label, [class*="label"], [class*="Label"]')];
+    for (const label of allLabels) {
+      if (!re.test(label.textContent)) continue;
+      // Zoek bijbehorende dropdown in de buurt
+      const parent = label.closest('div[class], section, form') || label.parentElement?.parentElement;
+      if (!parent) continue;
+      const trigger = parent.querySelector(
+        'button[aria-haspopup], [role="combobox"], [class*="dropdown"] button, [class*="select"] button, [class*="Select"] button'
+      );
+      if (trigger) return trigger;
+    }
+    // Fallback: zoek via aria-label
     return findEl([
+      `[aria-label*="${labelPattern}" i]`,
+      `button[data-testid*="${labelPattern}" i]`,
+    ]);
+  }
+
+  async function fillInput(el, value) {
+    if (!el || !value) return;
+    el.focus();
+    el.select?.();
+    const setter = Object.getOwnPropertyDescriptor(
+      el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype, 'value'
+    )?.set;
+    if (setter) setter.call(el, value);
+    el.dispatchEvent(new Event('input',  { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+    el.dispatchEvent(new Event('blur',   { bubbles: true }));
+  }
+
+  async function fillDropdownByValue(trigger, value) {
+    if (!trigger || !value) return false;
+    trigger.click();
+    await sleep(600);
+
+    // Zoek naar opties in geopend dropdown
+    const optionSelectors = [
+      '[role="option"]', '[role="listbox"] li', '[role="listbox"] [role="option"]',
+      '[class*="dropdown__item"]', '[class*="dropdownItem"]', '[class*="option"]',
+      '[class*="Option"]', 'ul li', '[class*="list"] li',
+    ];
+
+    let options = [];
+    for (const sel of optionSelectors) {
+      options = [...document.querySelectorAll(sel)].filter(el => el.offsetParent !== null);
+      if (options.length > 0) break;
+    }
+
+    if (options.length === 0) {
+      // Sluit dropdown en geef op
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      return false;
+    }
+
+    // Normaliseer zoekwaarde voor matching
+    const searchTerms = normalizeValue(value);
+    let best = null;
+    let bestScore = 0;
+
+    for (const opt of options) {
+      const text = normalizeValue(opt.textContent);
+      const score = matchScore(text, searchTerms);
+      if (score > bestScore) { bestScore = score; best = opt; }
+    }
+
+    if (best && bestScore > 0) {
+      best.click();
+      await sleep(300);
+      return true;
+    }
+
+    // Niets gevonden — sluit dropdown
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    return false;
+  }
+
+  function normalizeValue(str) {
+    return String(str).toLowerCase()
+      .replace(/[\/\-\(\)\.]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function matchScore(text, search) {
+    // Hoe hoog is de overlap tussen text en search?
+    const searchWords = search.split(' ').filter(w => w.length > 1);
+    let hits = 0;
+    for (const word of searchWords) {
+      if (text.includes(word)) hits++;
+    }
+    return hits / Math.max(searchWords.length, 1);
+  }
+
+  // ── FOTO UPLOAD ────────────────────────────────────────────────────────────
+
+  async function uploadPhotos(photos) {
+    if (!photos?.length) return false;
+
+    // Gebruik full-kwaliteit foto's als beschikbaar, anders preview
+    const photoData = photos.map(p => p.full || p.preview || p);
+
+    const input = findEl([
       'input[type="file"][multiple]',
       'input[type="file"][accept*="image"]',
       'input[type="file"]',
     ]);
-  }
 
-  function fillReactInput(el, value) {
-    if (!el) return;
-    const setter = Object.getOwnPropertyDescriptor(
-      el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype,
-      'value'
-    )?.set;
-    if (setter) setter.call(el, value);
-    el.dispatchEvent(new Event('input', { bubbles: true }));
-    el.dispatchEvent(new Event('change', { bubbles: true }));
-    el.dispatchEvent(new Event('blur', { bubbles: true }));
-  }
+    if (!input) return false;
 
-  async function fillTitle(text) {
-    const el = findTitle();
-    if (!el) return;
-    el.focus();
-    el.select();
-    fillReactInput(el, text.slice(0, 60));
-  }
-
-  async function fillDescription(text) {
-    const el = findDescription();
-    if (!el) return;
-    el.focus();
-    fillReactInput(el, text);
-  }
-
-  async function fillPrice(price) {
-    const el = findPrice();
-    if (!el) return;
-    el.focus();
-    fillReactInput(el, String(price));
-  }
-
-  async function fillCondition(staat) {
-    // Vinted staat-labels mappen naar knoppen
-    const map = {
-      'Nieuw met label':    ['nieuw met label', 'new with tags', 'new_with_tags', '1'],
-      'Nieuw zonder label': ['nieuw zonder label', 'new without tags', 'new_without_tags', '2'],
-      'Zeer goed':          ['zeer goed', 'very good', 'very_good', '3'],
-      'Goed':               ['goed', 'good', '4'],
-      'Redelijk':           ['redelijk', 'satisfactory', '5'],
-    };
-    const terms = map[staat] || [];
-    // Zoek naar label/button met matchende tekst
-    const allButtons = [...document.querySelectorAll('button, label, [role="radio"], [role="option"]')];
-    for (const term of terms) {
-      const btn = allButtons.find(b => b.textContent.toLowerCase().includes(term.toLowerCase()));
-      if (btn) { btn.click(); await sleep(200); break; }
+    const dt = new DataTransfer();
+    for (let i = 0; i < photoData.length; i++) {
+      try {
+        const blob = await fetch(photoData[i]).then(r => r.blob());
+        dt.items.add(new File([blob], `ventr-${i + 1}.jpg`, { type: 'image/jpeg' }));
+      } catch { /* skip */ }
     }
-  }
 
-  async function injectPhotos(photos) {
-    try {
-      const input = findFileInput();
-      if (!input) return false;
+    if (dt.files.length === 0) return false;
 
-      const dt = new DataTransfer();
-      for (let i = 0; i < photos.length; i++) {
-        const p = photos[i];
-        const blob = await fetch(p.preview).then(r => r.blob());
-        const file = new File([blob], `ventr-foto-${i + 1}.jpg`, { type: 'image/jpeg' });
-        dt.items.add(file);
-      }
+    const nativeSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'files')?.set;
+    if (nativeSetter) nativeSetter.call(input, dt.files);
+    else Object.defineProperty(input, 'files', { value: dt.files, configurable: true });
 
-      // React native input hack
-      const nativeSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'files')?.set;
-      if (nativeSetter) {
-        nativeSetter.call(input, dt.files);
-      } else {
-        Object.defineProperty(input, 'files', { value: dt.files, configurable: true });
-      }
-
-      input.dispatchEvent(new Event('change', { bubbles: true }));
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-      await sleep(500);
-      return true;
-    } catch (e) {
-      console.warn('[VENTR] Foto-injectie mislukt:', e);
-      return false;
-    }
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    input.dispatchEvent(new Event('input',  { bubbles: true }));
+    await sleep(800);
+    return true;
   }
 
   // ── UTILS ──────────────────────────────────────────────────────────────────
 
   function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
-
-  function escHtml(s) {
-    return String(s)
-      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
-      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  function esc(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   }
 
   // ── START ──────────────────────────────────────────────────────────────────
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-  } else {
-    init();
-  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
 
 })();

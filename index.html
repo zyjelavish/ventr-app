@@ -1239,6 +1239,17 @@ FOTO CONTEXT (voor foto-analyse):
 - Selecteer de meest verkoopbevorderende foto als cover: helder, item volledig zichtbaar, geen ruis.
 - Voeg toe aan JSON: "cover_index": [nummer van beste foto, 0-based]
 
+EMOJI GEBRUIK (strategisch, niet overdreven):
+- Begin beschrijving met 1 passende emoji die het artikel omschrijft
+- Gebruik emoji's bij voordelen: "🌸 Moeilijk te vinden in NL" / "🧸 Heerlijk zacht" / "✨ Bijna nieuw"
+- Eindig altijd licht positief: "Staat te wachten op een nieuwe eigenaar 🌿" of "Veel plezier ermee! 💕"
+- Max 4 emoji's per beschrijving, altijd relevant
+
+TAGS — zet onderaan de beschrijving op een nieuwe regel:
+Voeg 6-10 zoekbare hashtags toe die kopers op Vinted daadwerkelijk gebruiken.
+Formaat: #plussize #dames #casual #[merk] #[kledingstuktype] #[kleur] #[maat] #[stijl]
+Voorbeelden: #plussize #dames #jurk #zomer #ukfashion #maat46 #simpelybe #vintage
+
 Geef UITSLUITEND geldig JSON (geen uitleg, geen markdown):
 {"titel":"...","beschrijving":"...","prijs":12,"staat":"Goed","categorie":"Tops","maat":"46 DE/NL / UK 18 / FR 48","tags":["plus size","dames"],"merk":"...","materiaal":"...","cover_index":0}`;
 
@@ -1739,19 +1750,29 @@ window.addEventListener('message', e => {
 });
 
 async function photoToQueueThumb(photo) {
-  // Verklein foto voor wachtrij opslag (max 400px, kwaliteit 0.7)
+  // Twee versies: kleine thumbnail voor panel UI, grote versie voor Vinted upload
   return new Promise(res => {
     const img = new Image();
     img.onload = () => {
-      const MAX = 400;
-      const scale = Math.min(MAX / img.width, MAX / img.height, 1);
-      const c = document.createElement('canvas');
-      c.width = Math.round(img.width * scale);
-      c.height = Math.round(img.height * scale);
-      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-      res({ preview: c.toDataURL('image/jpeg', 0.7) });
+      // Klein: 180px voor UI
+      const scaleThumb = Math.min(180 / img.width, 180 / img.height, 1);
+      const ct = document.createElement('canvas');
+      ct.width  = Math.round(img.width  * scaleThumb);
+      ct.height = Math.round(img.height * scaleThumb);
+      ct.getContext('2d').drawImage(img, 0, 0, ct.width, ct.height);
+      const thumb = ct.toDataURL('image/jpeg', 0.65);
+
+      // Groot: 1200px voor Vinted upload — hoge kwaliteit
+      const scaleFull = Math.min(1200 / img.width, 1200 / img.height, 1);
+      const cf = document.createElement('canvas');
+      cf.width  = Math.round(img.width  * scaleFull);
+      cf.height = Math.round(img.height * scaleFull);
+      cf.getContext('2d').drawImage(img, 0, 0, cf.width, cf.height);
+      const full = cf.toDataURL('image/jpeg', 0.92);
+
+      res({ preview: thumb, full });
     };
-    img.onerror = () => res({ preview: photo.preview });
+    img.onerror = () => res({ preview: photo.preview, full: photo.preview });
     img.src = photo.preview;
   });
 }
