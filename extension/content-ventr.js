@@ -3,9 +3,10 @@
 
 window.addEventListener('message', e => {
   if (e.source !== window || !e.data?.type?.startsWith('VENTR_')) return;
+  if (e.data.type.endsWith('_RESPONSE')) return; // Geen response-loops
 
   chrome.runtime.sendMessage(e.data, response => {
-    // Stuur respons terug naar VENTR app
+    if (chrome.runtime.lastError) return;
     window.postMessage({ type: e.data.type + '_RESPONSE', ...response }, '*');
   });
 });
