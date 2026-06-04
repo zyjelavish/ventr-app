@@ -944,7 +944,7 @@ input[type=file] { display:none; }
     <div class="sidebar-top">
       <div class="sidebar-label">API Sleutel</div>
       <div class="api-field">
-        <input type="password" id="apiKey" placeholder="sk-ant-api03-..." oninput="handleApiKey(this.value)">
+        <input type="password" id="apiKey" placeholder="sk-ant-api03-..." oninput="handleApiKey(this.value)" value="">
         <span class="api-field-icon" onclick="toggleApiVisibility()">👁</span>
       </div>
       <p class="api-hint">
@@ -967,8 +967,12 @@ input[type=file] { display:none; }
     <input type="file" id="fileInput" multiple accept="image/*" onchange="handleFiles(this.files)">
 
     <!-- Buttons -->
+    <button class="action-btn btn-generate" id="autoBtn" onclick="startAutoMode()" disabled style="background:linear-gradient(135deg,#7D3C52,#C9956C)">
+      🚀 Alles automatisch
+    </button>
+
     <button class="action-btn btn-group" id="groupBtn" onclick="startGrouping()" disabled>
-      🔍 Groepeer automatisch
+      🔍 Groepeer eerst
     </button>
 
     <button class="action-btn btn-generate" id="generateBtn" onclick="generateAll()" disabled style="display:none">
@@ -1036,34 +1040,64 @@ input[type=file] { display:none; }
 <script>
 // ── STATE ──────────────────────────────────────────────────────────────────
 
+const MODEL_FAST  = 'claude-haiku-4-5-20251001'; // groepering: snel & goedkoop
+const MODEL_SMART = 'claude-sonnet-4-6';          // generatie: hoge kwaliteit
+
 const state = {
-  photos: [],       // {id, preview, base64, mediaType}
-  groups: [],       // {id, photoIndices, status, listing}
-  phase: 'upload',  // upload | grouping | grouped | generating | done
-  apiKey: '',
+  photos: [],
+  groups: [],
+  phase: 'upload',
+  apiKey: localStorage.getItem('ventr_api_key') || '',
   mergeMode: false,
   mergeTarget: null,
-  copiedKeys: {},
+  groupingProgress: '',
 };
 
 const STATES = ['Nieuw met label','Nieuw zonder label','Zeer goed','Goed','Redelijk'];
 
-const SYSTEM = `Je bent een assistent die Vinted-advertenties schrijft voor een plus size verkoper.
-Profiel: eigen kledingkast maat 44-50 DE/NL, stijlvolle plus size kleding incl. UK-merken.
-Toon: casual, eerlijk, warm, 1-3 emoji's, geen nep-enthousiasme.
-Franse kopers: altijd vermelden 1 maat groter bestellen.
-UK-merken (Yours, Simply Be, Joe Browns, Elvi, Navabi, Eloquii): vermeld dat moeilijk verkrijgbaar in NL.
+const SYSTEM = `Je bent een expert Vinted-verkoper die advertenties schrijft die maximaal verkopen.
+Profiel: plus size kledingkast maat 44-50 DE/NL (= UK 16-22 / FR 46-52).
 
-Schrijfstijl: "Comfy en lekker wijd 🧸" / "Weinig gedragen, nog heel netjes!" / "Moeilijk te vinden in NL 🌸"
+VINTED SEO — titel bepaalt vindbaarheid:
+- Formule: [Merk] + [kledingstuk] + [kleur/print] + [maat]
+- Max 50 tekens. Gebruik woorden kopers zoeken: "blouse", "jurk", "broek", niet vage termen.
+- Nooit hoofdletters SHOUTEN — gebruik gewone zin.
 
-Prijzen: H&M/Shein €4-9, Zara/Only €9-18, NL plus size (Ulla Popken, Samoon) €12-24,
-UK plus size €15-32, UK jurk/jas €20-38, onbekend goed €7-14.
-Slijtage -€3, nieuw+tags +€6, zeldzaam +€8.
+VERKOOP PSYCHOLOGIE:
+- Open beschrijving met de sterkste eigenschap van het artikel.
+- Noem ALTIJD draagcomfort: "lekker wijd", "soepele val", "heerlijk zacht", "valt ruim".
+- Eerlijkheid verkoopt beter dan glossen: "1x gedragen", "weinig gedragen" wekt vertrouwen.
+- 1-3 emoji's, relevant en spaarzaam. Eindig licht: "staat te wachten op een nieuw thuis 🌿"
+- Noem NOOIT prijzen van andere Vinted-items in de beschrijving.
 
-Je krijgt meerdere foto's van hetzelfde artikel — analyseer ze allemaal.
+PLUS SIZE SPECIFIEK:
+- Franse kopers: ALTIJD toevoegen "voor Franse maten: bestel 1 maat groter (FR 48 = NL 44)"
+- UK-merken (Yours, Simply Be, Joe Browns, Elvi, Navabi, Eloquii, Evans, Monsoon Plus, Long Tall Sally):
+  → "Moeilijk te vinden in Nederland 🌸" — rechtvaardigt hogere prijs
+  → Vermeld dat UK plus size uitstekende pasvorm heeft voor volle borst en heupen
+- Maatnotatie: altijd "[maat] DE/NL / UK [x] / FR [x]" — alle drie vermelden
 
-Geef UITSLUITEND geldig JSON:
-{"titel":"...","beschrijving":"...","prijs":12,"staat":"Goed","categorie":"Tops","maat":"46 (DE/NL)","tags":["plus size"]}`;
+LABELS LEZEN (als labelfoto aanwezig):
+- Extraheer: merk, exacte maat, samenstellling, wastemperatuur
+- Materiaal verhoogt prijs: katoen/polyester neutraal, viscose/modal +€2, merino/cashmere +€8
+
+SLIJTAGE DETECTIE vanuit foto's:
+- Kijk actief naar: pillen, vlekken, gerafelde randen, verkleuringen, ontbrekende knopen
+- Wees eerlijk over staat — te positief leidt tot slechte reviews en retouren
+
+PRIJSSTRATEGIE:
+- H&M/Primark/Shein: €4-8
+- Zara/Only/Vero Moda/Reserved: €9-16
+- C&A bewust/Esprit: €8-14
+- NL plus size (Ulla Popken, Samoon, Ellos, MS Mode): €14-26
+- UK plus size (Yours, Simply Be, Evans): €16-30
+- UK premium (Joe Browns, Monsoon Plus, Navabi): €22-38
+- Desigual/Gudrun Sjödén/Chalou/Avenue: €20-42
+- Onbekend merk, goede kwaliteit: €8-15
+Correcties: slijtage/pilling zichtbaar -€3, originele tags nog aan +€5, zeldzaam/collectors +€10
+
+Geef UITSLUITEND geldig JSON (geen uitleg, geen markdown):
+{"titel":"...","beschrijving":"...","prijs":12,"staat":"Goed","categorie":"Tops","maat":"46 DE/NL / UK 18 / FR 48","tags":["plus size","dames"],"merk":"...","materiaal":"..."}`;
 
 // ── HELPERS ────────────────────────────────────────────────────────────────
 
@@ -1081,17 +1115,16 @@ function readFile(file) {
   });
 }
 
-function resizeForGrouping(base64, mediaType) {
+function resizeImage(base64, mediaType, maxPx, quality) {
   return new Promise(res => {
     const img = new Image();
     img.onload = () => {
-      const MAX = 300;
-      const scale = Math.min(MAX / img.width, MAX / img.height, 1);
+      const scale = Math.min(maxPx / img.width, maxPx / img.height, 1);
       const c = document.createElement('canvas');
       c.width = Math.max(1, Math.round(img.width * scale));
       c.height = Math.max(1, Math.round(img.height * scale));
       c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-      const d = c.toDataURL('image/jpeg', 0.6);
+      const d = c.toDataURL('image/jpeg', quality);
       res({ base64: d.split(',')[1], mediaType: 'image/jpeg' });
     };
     img.onerror = () => res({ base64, mediaType });
@@ -1099,8 +1132,11 @@ function resizeForGrouping(base64, mediaType) {
   });
 }
 
-async function claudeCall(messages, system) {
-  const body = { model: 'claude-sonnet-4-20250514', max_tokens: 1200, messages };
+const resizeForGrouping   = (b64, mt) => resizeImage(b64, mt, 320, 0.60);
+const resizeForGeneration = (b64, mt) => resizeImage(b64, mt, 1100, 0.82);
+
+async function claudeCall(messages, system, model) {
+  const body = { model: model || MODEL_SMART, max_tokens: 1400, messages };
   if (system) body.system = system;
   const r = await fetch('/api/claude', {
     method: 'POST',
@@ -1108,12 +1144,14 @@ async function claudeCall(messages, system) {
     body: JSON.stringify(body)
   });
   const d = await r.json();
-  if (d.error) throw new Error(d.error.message);
+  if (!r.ok || d.error) throw new Error(d.error?.message || `HTTP ${r.status}`);
   return d.content?.find(b => b.type === 'text')?.text || '';
 }
 
 function parseJSON(text) {
-  return JSON.parse(text.replace(/```json|```/g, '').trim());
+  const clean = text.replace(/```json|```/g, '').trim();
+  const match = clean.match(/\{[\s\S]*\}/);
+  return JSON.parse(match ? match[0] : clean);
 }
 
 function showToast(msg) {
@@ -1132,6 +1170,7 @@ function copyText(text) {
 
 function handleApiKey(val) {
   state.apiKey = val.trim();
+  localStorage.setItem('ventr_api_key', state.apiKey);
   const dot = document.getElementById('apiDot');
   const txt = document.getElementById('apiStatusText');
   const valid = val.startsWith('sk-ant') && val.length > 20;
@@ -1180,34 +1219,72 @@ function removePhoto(id) {
 
 // ── GROUPING ───────────────────────────────────────────────────────────────
 
+const CHUNK_SIZE = 8; // max foto's per groeperings-API call
+
 async function startGrouping() {
   if (!state.apiKey) { showToast('Voer eerst je API sleutel in'); return; }
   if (!state.photos.length) return;
 
   state.phase = 'grouping';
+  state.groupingProgress = 'Foto\'s verkleinen...';
   renderMain();
 
   try {
+    // Resize alle foto's voor groepering
     const small = await Promise.all(state.photos.map(p => resizeForGrouping(p.base64, p.mediaType)));
-    const content = [
-      ...small.map(s => ({ type: 'image', source: { type: 'base64', media_type: s.mediaType, data: s.base64 } })),
-      { type: 'text', text: `Je ziet ${state.photos.length} foto's (index 0 t/m ${state.photos.length - 1}). Groepeer foto's van HETZELFDE artikel (kleur, patroon, snit, label). Antwoord UITSLUITEND als JSON: {"groups":[[0,1],[2],[3,4,5]]}` }
-    ];
-    const text = await claudeCall([{ role: 'user', content }]);
-    const parsed = parseJSON(text);
-    state.groups = parsed.groups.map((indices, i) => ({
-      id: uid(),
-      photoIndices: indices.filter(n => n >= 0 && n < state.photos.length),
-      status: 'idle', listing: null
+
+    // Splits in chunks van CHUNK_SIZE
+    const chunks = [];
+    for (let i = 0; i < small.length; i += CHUNK_SIZE) {
+      chunks.push({ start: i, photos: small.slice(i, i + CHUNK_SIZE) });
+    }
+
+    let allGroups = [];
+    let offset = 0;
+
+    for (let ci = 0; ci < chunks.length; ci++) {
+      const chunk = chunks[ci];
+      state.groupingProgress = `Batch ${ci + 1} van ${chunks.length} groeperen...`;
+      renderMain();
+
+      const localCount = chunk.photos.length;
+      const content = [
+        ...chunk.photos.map(s => ({ type: 'image', source: { type: 'base64', media_type: s.mediaType, data: s.base64 } })),
+        { type: 'text', text: `Je ziet ${localCount} foto's (lokale index 0 t/m ${localCount - 1}). Groepeer foto's van HETZELFDE artikel op basis van kleur, stof, patroon, snit en zichtbare labels. Eén foto kan ook een eigen groep zijn. Antwoord UITSLUITEND als JSON: {"groups":[[0,1],[2],[3,4,5]]}` }
+      ];
+
+      try {
+        const text = await claudeCall([{ role: 'user', content }], null, MODEL_FAST);
+        const parsed = parseJSON(text);
+        parsed.groups.forEach(indices => {
+          const global = indices.map(n => n + offset).filter(n => n < state.photos.length);
+          if (global.length) allGroups.push(global);
+        });
+      } catch (err) {
+        // chunk mislukt → elk apart
+        for (let j = 0; j < localCount; j++) allGroups.push([j + offset]);
+        showToast(`Batch ${ci + 1} mislukt — items apart gezet`);
+      }
+      offset += localCount;
+    }
+
+    state.groups = allGroups.map(indices => ({
+      id: uid(), photoIndices: indices, status: 'idle', listing: null
     }));
+
   } catch (err) {
-    // Fallback: each photo is own group
     state.groups = state.photos.map((_, i) => ({ id: uid(), photoIndices: [i], status: 'idle', listing: null }));
     showToast('Groepering mislukt — elk artikel apart');
   }
 
   state.phase = 'grouped';
   renderAll();
+}
+
+// Eén-klik modus: groepeer + genereer zonder review
+async function startAutoMode() {
+  await startGrouping();
+  if (state.groups.length) await generateAll();
 }
 
 function splitPhoto(groupId, photoIdx) {
@@ -1255,19 +1332,23 @@ async function generateAll() {
   for (const group of state.groups) {
     if (group.status === 'done') continue;
     group.status = 'processing';
+    group.error = null;
     renderSidebar();
 
     try {
-      const gPhotos = group.photoIndices.map(i => state.photos[i]);
+      const gPhotos = group.photoIndices.map(i => state.photos[i]).filter(Boolean);
+      // Resize naar max 1100px voor generatie — kwaliteit behouden, payload beheersbaar
+      const resized = await Promise.all(gPhotos.map(p => resizeForGeneration(p.base64, p.mediaType)));
       const content = [
-        ...gPhotos.map(p => ({ type: 'image', source: { type: 'base64', media_type: p.mediaType, data: p.base64 } })),
-        { type: 'text', text: `Dit zijn ${gPhotos.length} foto's van hetzelfde artikel. Genereer een Vinted advertentie. Antwoord ALLEEN als JSON.` }
+        ...resized.map(r => ({ type: 'image', source: { type: 'base64', media_type: r.mediaType, data: r.base64 } })),
+        { type: 'text', text: `Dit zijn ${resized.length} foto's van hetzelfde kledingstuk. Analyseer alles zorgvuldig: kleur, stof, patroon, snit, zichtbare labels, staat van het artikel. Genereer een Vinted-advertentie die maximaal verkoopt. Antwoord UITSLUITEND als JSON.` }
       ];
-      const text = await claudeCall([{ role: 'user', content }], SYSTEM);
+      const text = await claudeCall([{ role: 'user', content }], SYSTEM, MODEL_SMART);
       group.listing = parseJSON(text);
       group.status = 'done';
-    } catch {
+    } catch (err) {
       group.status = 'error';
+      group.error = err.message;
     }
     renderSidebar();
     updateStats();
@@ -1275,6 +1356,16 @@ async function generateAll() {
 
   state.phase = 'done';
   renderMain();
+}
+
+async function retryGroup(groupId) {
+  const g = state.groups.find(g => g.id === groupId);
+  if (!g) return;
+  g.status = 'idle';
+  g.error = null;
+  state.phase = 'generating';
+  renderMain();
+  await generateAll();
 }
 
 function updateListing(groupId, field, value) {
@@ -1288,9 +1379,25 @@ function exportAll() {
   const done = state.groups.filter(g => g.status === 'done');
   const text = done.map(g => {
     const l = g.listing;
-    return `━━━━━━━━━━━━━━━━━━━━\n${l.titel}\n\n${l.beschrijving}\n\nStaat: ${l.staat}  |  Maat: ${l.maat}  |  Categorie: ${l.categorie}\nPrijs: €${l.prijs}\n`;
+    return `━━━━━━━━━━━━━━━━━━━━\n${l.titel}\n\n${l.beschrijving}\n\nStaat: ${l.staat}  |  Maat: ${l.maat}  |  Categorie: ${l.categorie}  |  Merk: ${l.merk||'?'}\nPrijs: €${l.prijs}\n`;
   }).join('\n');
   copyText(text);
+}
+
+function exportCSV() {
+  const done = state.groups.filter(g => g.status === 'done');
+  const header = 'Titel,Beschrijving,Prijs,Staat,Maat,Categorie,Merk,Materiaal,Tags';
+  const rows = done.map(g => {
+    const l = g.listing;
+    const esc = v => `"${String(v||'').replace(/"/g,'""')}"`;
+    return [l.titel, l.beschrijving, l.prijs, l.staat, l.maat, l.categorie, l.merk||'', l.materiaal||'', (l.tags||[]).join(';')].map(esc).join(',');
+  });
+  const csv = [header, ...rows].join('\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = 'ventr-advertenties.csv'; a.click();
+  URL.revokeObjectURL(url);
+  showToast('✓ CSV gedownload');
 }
 
 function copyListing(groupId) {
@@ -1312,13 +1419,21 @@ function renderAll() {
 function updateButtons() {
   const hasKey = state.apiKey.startsWith('sk-ant') && state.apiKey.length > 20;
   const hasPhotos = state.photos.length > 0;
+  const busy = state.phase === 'grouping' || state.phase === 'generating';
+  const ab = document.getElementById('autoBtn');
   const gb = document.getElementById('groupBtn');
   const genb = document.getElementById('generateBtn');
 
-  gb.disabled = !hasKey || !hasPhotos || state.phase === 'grouping';
+  // Auto knop: altijd zichtbaar in upload fase
+  ab.disabled = !hasKey || !hasPhotos || busy;
+  ab.style.display = state.phase === 'upload' ? 'flex' : 'none';
+
+  // Groepeer knop
+  gb.disabled = !hasKey || !hasPhotos || busy;
   gb.style.display = state.phase === 'upload' ? 'flex' : 'none';
 
-  genb.disabled = !hasKey;
+  // Genereer knop
+  genb.disabled = !hasKey || busy;
   genb.style.display = state.phase === 'grouped' ? 'flex' : 'none';
   if (genb.style.display === 'flex') {
     genb.textContent = `✨ Genereer ${state.groups.length} advertenties`;
@@ -1379,7 +1494,7 @@ function renderMain() {
       <div class="progress-state fade-in">
         <div style="font-size:42px">🔍</div>
         <div class="progress-title">Foto's groeperen...</div>
-        <div class="progress-sub">Claude analyseert welke foto's bij hetzelfde artikel horen</div>
+        <div class="progress-sub">${state.groupingProgress || 'Claude analyseert welke foto\'s bij hetzelfde artikel horen'}</div>
         <div class="spinner"></div>
       </div>`;
     return;
@@ -1485,8 +1600,15 @@ function renderResults() {
 
     if (g.status === 'error') {
       return `<div class="listing-card fade-in" id="gc_${g.id}">
-        <div class="lc-header" style="background:var(--blush)">
-          <div>Artikel ${gi + 1} — genereren mislukt</div>
+        <div class="lc-header" style="background:var(--blush);gap:16px">
+          <div class="lc-photos">
+            ${g.photoIndices.slice(0,3).map(i => state.photos[i] ? `<img src="${state.photos[i].preview}">` : '').join('')}
+          </div>
+          <div style="flex:1">
+            <div style="font-size:12px;font-weight:500;color:var(--rose-deep);margin-bottom:4px">Artikel ${gi + 1} — genereren mislukt</div>
+            ${g.error ? `<div style="font-size:10px;color:var(--warm-gray);font-family:monospace">${escHtml(g.error)}</div>` : ''}
+          </div>
+          <button class="copy-btn" onclick="retryGroup('${g.id}')">↻ Opnieuw</button>
         </div>
       </div>`;
     }
@@ -1544,6 +1666,18 @@ function renderResults() {
                 oninput="updateListing('${g.id}','categorie',this.value)" style="height:auto">
             </div>
           </div>
+          <div class="meta-row" style="margin-top:0">
+            <div class="field-group" style="margin-bottom:0">
+              <div class="field-label">Merk</div>
+              <input class="field-input meta-select" type="text" value="${escHtml(l.merk||'')}"
+                oninput="updateListing('${g.id}','merk',this.value)" style="height:auto">
+            </div>
+            <div class="field-group" style="margin-bottom:0">
+              <div class="field-label">Materiaal</div>
+              <input class="field-input meta-select" type="text" value="${escHtml(l.materiaal||'')}"
+                oninput="updateListing('${g.id}','materiaal',this.value)" style="height:auto">
+            </div>
+          </div>
           ${l.tags?.length ? `<div class="tags-row" style="margin-top:12px">${l.tags.map(t => `<span class="tag">#${t}</span>`).join('')}</div>` : ''}
         </div>
       </div>`;
@@ -1560,7 +1694,8 @@ function renderResults() {
         </div>
         <div style="display:flex;align-items:center;gap:12px">
           ${done.length > 0 ? `<span class="results-total">€${total} totaal</span>` : ''}
-          ${done.length > 0 ? `<button class="export-btn" onclick="exportAll()">📋 Exporteer alle (${done.length})</button>` : ''}
+          ${done.length > 0 ? `<button class="export-btn" onclick="exportCSV()" style="background:var(--rose-deep)">📊 CSV</button>` : ''}
+          ${done.length > 0 ? `<button class="export-btn" onclick="exportAll()">📋 Kopieer alle (${done.length})</button>` : ''}
         </div>
       </div>
       ${cards}
@@ -1572,6 +1707,12 @@ function escHtml(str) {
 }
 
 // ── INIT ───────────────────────────────────────────────────────────────────
+// Herstel API key vanuit localStorage
+if (state.apiKey) {
+  const inp = document.getElementById('apiKey');
+  if (inp) inp.value = state.apiKey;
+  handleApiKey(state.apiKey);
+}
 renderAll();
 </script>
 </body>
