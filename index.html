@@ -9,6 +9,28 @@
 * { margin:0; padding:0; box-sizing:border-box; }
 html { scroll-behavior:smooth; }
 
+/* ── ACHTERGROND ROTATIE ── */
+.bg-layer {
+  position: fixed; inset: 0; z-index: 0;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  opacity: 0;
+  transition: opacity 2s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+}
+.bg-layer.active { opacity: 1; }
+.bg-layer::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(
+    135deg,
+    rgba(253,248,242,0.18) 0%,
+    rgba(201,149,108,0.06) 50%,
+    rgba(125,60,82,0.10) 100%
+  );
+}
+
 :root {
   --rg:        #C9956C;
   --rg-light:  #E8C4A0;
@@ -34,12 +56,13 @@ body {
   background: var(--off-white);
   color: var(--dark);
   min-height:100vh;
+  position: relative;
 }
 
 /* ── HEADER ── */
 header {
-  background: var(--champagne);
-  border-bottom: 1px solid rgba(201,168,76,0.2);
+  background: rgba(253,248,242,0.72);
+  border-bottom: 1px solid rgba(201,168,76,0.25);
   padding: 0 5vw;
   height: 68px;
   display: flex;
@@ -48,7 +71,8 @@ header {
   position: sticky;
   top: 0;
   z-index: 100;
-  backdrop-filter: blur(12px);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
 }
 
 .logo {
@@ -103,11 +127,13 @@ header {
 
 /* ── SIDEBAR ── */
 .sidebar {
-  background: var(--champagne);
-  border-right: 1px solid var(--silver);
+  background: rgba(253,248,242,0.82);
+  border-right: 1px solid rgba(201,168,76,0.2);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
 }
 
 .sidebar-top {
@@ -905,7 +931,12 @@ input[type=file] { display:none; }
   height: 2px;
   background: linear-gradient(90deg, var(--gold), transparent);
   margin-bottom: 0;
+  position: relative; z-index: 10;
 }
+
+/* Zorg dat alles boven achtergrond staat */
+header, .app, #loginOverlay { position: relative; z-index: 10; }
+.main { background: rgba(250,248,245,0.55); backdrop-filter: blur(2px); }
 
 /* ── GROEPERING UI ── */
 .group-photos-strip {
@@ -1037,18 +1068,33 @@ input[type=file] { display:none; }
 /* ── LOGIN OVERLAY ── */
 #loginOverlay {
   position: fixed; inset: 0; z-index: 99999;
-  background: linear-gradient(135deg, #FDF8F2 0%, #F5EBE0 50%, #EDD9C8 100%);
   display: flex; align-items: center; justify-content: center;
+  background: transparent;
 }
 
 .login-card {
-  background: white;
-  border: 1px solid var(--rg-light);
-  border-radius: 20px;
-  padding: 48px 40px;
-  width: 360px;
-  box-shadow: 0 20px 60px rgba(125,60,82,0.15);
+  background: rgba(255, 255, 255, 0.42);
+  backdrop-filter: blur(32px) saturate(180%);
+  -webkit-backdrop-filter: blur(32px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.75);
+  border-radius: 24px;
+  padding: 52px 44px;
+  width: 380px;
+  box-shadow:
+    0 24px 64px rgba(125,60,82,0.18),
+    0 2px 0 rgba(255,255,255,0.8) inset,
+    0 -1px 0 rgba(201,149,108,0.15) inset;
   text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.login-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(201,168,76,0.6), transparent);
 }
 
 .login-logo {
@@ -1071,15 +1117,23 @@ input[type=file] { display:none; }
 
 .login-field input {
   width: 100%; padding: 14px 16px;
-  border: 1.5px solid var(--silver); border-radius: 10px;
+  border: 1px solid rgba(201,149,108,0.35);
+  border-radius: 12px;
   font-family: 'DM Sans', sans-serif; font-size: 14px;
-  outline: none; background: var(--off-white);
-  transition: border-color 0.2s; text-align: center;
+  outline: none;
+  background: rgba(255,255,255,0.55);
+  backdrop-filter: blur(8px);
+  transition: all 0.2s; text-align: center;
   letter-spacing: 3px;
+  color: var(--dark);
 }
 
-.login-field input:focus { border-color: var(--rg); background: white; }
-.login-field input::placeholder { letter-spacing: 1px; }
+.login-field input:focus {
+  border-color: rgba(201,149,108,0.7);
+  background: rgba(255,255,255,0.75);
+  box-shadow: 0 0 0 3px rgba(201,149,108,0.12);
+}
+.login-field input::placeholder { letter-spacing: 1px; color: var(--mid-gray); }
 
 .login-btn {
   width: 100%; padding: 14px;
@@ -1139,6 +1193,10 @@ body.platform-markt { --rg: #2E86C1; --rg-light: #AED6F1; --rg-pale: #EBF5FB; --
 </style>
 </head>
 <body>
+
+<!-- ACHTERGROND LAGEN (crossfade) -->
+<div id="bg-layer-a" class="bg-layer"></div>
+<div id="bg-layer-b" class="bg-layer"></div>
 
 <!-- LOGIN OVERLAY -->
 <div id="loginOverlay">
@@ -1292,6 +1350,57 @@ body.platform-markt { --rg: #2E86C1; --rg-light: #AED6F1; --rg-pale: #EBF5FB; --
 
 <script>
 // ── STATE ──────────────────────────────────────────────────────────────────
+
+// ── ACHTERGROND ROTATIE ────────────────────────────────────────────────────
+
+const BG_IMAGES = Array.from({length: 24}, (_, i) =>
+  `/images/bg${String(i+1).padStart(2,'0')}.jpg`
+);
+
+const bgState = { active: 'a', current: 0 };
+
+function shuffleArray(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+const bgQueue = shuffleArray(BG_IMAGES);
+
+function initBackgrounds() {
+  // Preload eerste twee
+  bgQueue.slice(0, 3).forEach(src => { const img = new Image(); img.src = src; });
+
+  const layerA = document.getElementById('bg-layer-a');
+  const layerB = document.getElementById('bg-layer-b');
+
+  layerA.style.backgroundImage = `url(${bgQueue[0]})`;
+  layerA.classList.add('active');
+  bgState.current = 0;
+
+  setInterval(() => {
+    bgState.current = (bgState.current + 1) % bgQueue.length;
+    const next = bgState.active === 'a' ? 'b' : 'a';
+    const nextLayer = document.getElementById(`bg-layer-${next}`);
+    const prevLayer = document.getElementById(`bg-layer-${bgState.active}`);
+
+    nextLayer.style.backgroundImage = `url(${bgQueue[bgState.current]})`;
+    nextLayer.classList.add('active');
+
+    // Preload volgende
+    const preload = new Image();
+    preload.src = bgQueue[(bgState.current + 1) % bgQueue.length];
+
+    setTimeout(() => {
+      prevLayer.classList.remove('active');
+      bgState.active = next;
+    }, 2200);
+
+  }, 12000); // elke 12 seconden wisselen
+}
 
 // ── AUTH ────────────────────────────────────────────────────────────────────
 
@@ -2818,6 +2927,9 @@ function escHtml(str) {
 }
 
 // ── INIT ───────────────────────────────────────────────────────────────────
+// Achtergrond altijd starten — ook op loginscherm
+initBackgrounds();
+
 // Auth check — altijd eerste
 checkAuth().then(() => {
   if (state.apiKey) {
