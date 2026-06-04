@@ -1,0 +1,1578 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VENTR — AI Listing Studio</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap" rel="stylesheet">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+html { scroll-behavior:smooth; }
+
+:root {
+  --rg:        #C9956C;
+  --rg-light:  #E8C4A0;
+  --rg-pale:   #F5EBE0;
+  --blush:     #F2D4D7;
+  --blush-deep:#E8B4B8;
+  --champagne: #FDF8F2;
+  --gold:      #C9A84C;
+  --gold-lt:   #EDD98A;
+  --rose:      #B5607A;
+  --rose-deep: #7D3C52;
+  --off-white: #FAF8F5;
+  --cream:     #FDF9F4;
+  --sand:      #F0E8E0;
+  --warm-gray: #8A7570;
+  --mid-gray:  #C8B8B0;
+  --dark:      #2C1A14;
+  --silver:    #D4C8C0;
+}
+
+body {
+  font-family:'DM Sans', sans-serif;
+  background: var(--off-white);
+  color: var(--dark);
+  min-height:100vh;
+}
+
+/* ── HEADER ── */
+header {
+  background: var(--champagne);
+  border-bottom: 1px solid rgba(201,168,76,0.2);
+  padding: 0 5vw;
+  height: 68px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  backdrop-filter: blur(12px);
+}
+
+.logo {
+  font-family:'Cormorant Garamond', serif;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 4px;
+  color: var(--rose-deep);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.logo-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--gold);
+}
+
+.header-tag {
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--warm-gray);
+}
+
+.api-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--warm-gray);
+}
+
+.api-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--mid-gray);
+  transition: background 0.3s;
+}
+
+.api-dot.connected { background: #7AB87A; }
+
+/* ── MAIN LAYOUT ── */
+.app {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  min-height: calc(100vh - 68px);
+}
+
+/* ── SIDEBAR ── */
+.sidebar {
+  background: var(--champagne);
+  border-right: 1px solid var(--silver);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sidebar-top {
+  padding: 24px 20px 16px;
+  border-bottom: 1px solid var(--silver);
+}
+
+.sidebar-label {
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  color: var(--rg);
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sidebar-label::before {
+  content:'';
+  width:16px; height:1px;
+  background:var(--gold);
+}
+
+/* API Key input */
+.api-field {
+  position: relative;
+  margin-bottom: 12px;
+}
+
+.api-field input {
+  width: 100%;
+  background: var(--off-white);
+  border: 1px solid var(--silver);
+  border-radius: 6px;
+  padding: 10px 36px 10px 12px;
+  font-size: 11px;
+  font-family: 'DM Sans', sans-serif;
+  color: var(--dark);
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.api-field input:focus { border-color: var(--rg); }
+.api-field input::placeholder { color: var(--mid-gray); }
+
+.api-field-icon {
+  position: absolute;
+  right: 10px; top: 50%;
+  transform: translateY(-50%);
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--warm-gray);
+  user-select: none;
+}
+
+.api-hint {
+  font-size: 10px;
+  color: var(--warm-gray);
+  line-height: 1.5;
+}
+
+.api-hint a {
+  color: var(--rg);
+  text-decoration: none;
+}
+
+/* Drop zone */
+.drop-zone {
+  margin: 16px 20px;
+  border: 2px dashed var(--silver);
+  border-radius: 10px;
+  padding: 20px 14px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: var(--off-white);
+}
+
+.drop-zone:hover, .drop-zone.drag-over {
+  border-color: var(--rg);
+  background: var(--rg-pale);
+}
+
+.drop-icon { font-size: 24px; margin-bottom: 8px; }
+
+.drop-title {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--rose-deep);
+  margin-bottom: 4px;
+}
+
+.drop-sub {
+  font-size: 10px;
+  color: var(--warm-gray);
+  line-height: 1.5;
+}
+
+input[type=file] { display:none; }
+
+/* Action buttons */
+.action-btn {
+  margin: 0 20px 8px;
+  width: calc(100% - 40px);
+  padding: 11px 16px;
+  border: none;
+  border-radius: 8px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.btn-group { background: var(--rose-deep); color: white; }
+.btn-group:hover { background: var(--rose); }
+.btn-group:disabled { background: var(--mid-gray); cursor:not-allowed; }
+
+.btn-generate { background: linear-gradient(135deg, var(--rg), var(--rose)); color: white; }
+.btn-generate:hover { opacity:0.9; }
+.btn-generate:disabled { background: var(--mid-gray); cursor:not-allowed; }
+
+/* Photo thumbnails */
+.photo-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 10px 10px;
+}
+
+.photo-thumb {
+  position: relative;
+  margin-bottom: 6px;
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: border-color 0.15s;
+}
+
+.photo-thumb.active { border-color: var(--rg); }
+
+.photo-thumb img {
+  width: 100%;
+  height: 80px;
+  object-fit: cover;
+  display: block;
+}
+
+.photo-badge {
+  position: absolute;
+  bottom: 4px; left: 4px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 500;
+  color: white;
+  backdrop-filter: blur(4px);
+}
+
+.badge-idle { background: rgba(0,0,0,0.5); }
+.badge-processing { background: rgba(180,120,40,0.85); }
+.badge-done { background: rgba(60,120,60,0.85); }
+.badge-error { background: rgba(160,40,40,0.85); }
+
+.photo-price {
+  position: absolute;
+  top: 4px; right: 4px;
+  background: rgba(0,0,0,0.7);
+  color: var(--gold-lt);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.photo-remove {
+  position: absolute;
+  top: 4px; left: 4px;
+  width: 18px; height: 18px;
+  background: rgba(0,0,0,0.65);
+  border: none;
+  border-radius: 50%;
+  color: white;
+  font-size: 10px;
+  cursor: pointer;
+  display: flex; align-items:center; justify-content:center;
+  line-height: 1;
+}
+
+/* Sidebar stats */
+.sidebar-stats {
+  padding: 12px 20px;
+  border-top: 1px solid var(--silver);
+  display: flex;
+  justify-content: space-between;
+}
+
+.stat-item { text-align: center; }
+
+.stat-num {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 22px;
+  font-weight: 300;
+  color: var(--rose-deep);
+  line-height: 1;
+}
+
+.stat-label {
+  font-size: 9px;
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--warm-gray);
+  margin-top: 2px;
+}
+
+/* ── MAIN CONTENT ── */
+.main {
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Empty state */
+.empty-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 40px;
+  text-align: center;
+}
+
+.empty-hero {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: clamp(38px, 4vw, 64px);
+  font-weight: 300;
+  line-height: 1.15;
+  color: var(--rose-deep);
+  margin-bottom: 16px;
+  max-width: 540px;
+}
+
+.empty-hero em { font-style:italic; color: var(--rg); }
+
+.empty-sub {
+  font-size: 14px;
+  font-weight: 300;
+  line-height: 1.8;
+  color: var(--warm-gray);
+  max-width: 400px;
+  margin-bottom: 48px;
+}
+
+.steps-row {
+  display: flex;
+  gap: 40px;
+  margin-top: 8px;
+}
+
+.step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  max-width: 120px;
+}
+
+.step-circle {
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  background: var(--rg-pale);
+  border: 1px solid var(--rg-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 20px;
+  font-weight: 300;
+  color: var(--rose-deep);
+}
+
+.step-text {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--warm-gray);
+  text-align: center;
+  line-height: 1.5;
+}
+
+/* Progress state */
+.progress-state {
+  flex:1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px;
+  text-align: center;
+  gap: 20px;
+}
+
+.progress-title {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 32px;
+  font-weight: 300;
+  color: var(--rose-deep);
+}
+
+.progress-sub {
+  font-size: 13px;
+  color: var(--warm-gray);
+}
+
+.progress-bar-wrap {
+  width: 280px;
+  height: 4px;
+  background: var(--sand);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--rg), var(--rose));
+  border-radius: 2px;
+  transition: width 0.5s ease;
+}
+
+/* Grouping review */
+.group-review {
+  padding: 32px 40px;
+}
+
+.gr-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 28px;
+  gap: 20px;
+}
+
+.gr-title {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 28px;
+  font-weight: 300;
+  color: var(--rose-deep);
+  margin-bottom: 6px;
+}
+
+.gr-sub {
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--warm-gray);
+  max-width: 480px;
+  line-height: 1.6;
+}
+
+.gr-actions {
+  display: flex;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.btn-sm {
+  padding: 9px 18px;
+  border-radius: 7px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s;
+}
+
+.btn-confirm {
+  background: linear-gradient(135deg, #4A7A50, #2C5A32);
+  color: white;
+  box-shadow: 0 3px 12px rgba(60,120,60,0.3);
+}
+
+.btn-confirm:hover { opacity:0.9; }
+
+.btn-merge {
+  background: var(--rg-pale);
+  color: var(--rose-deep);
+  border: 1px solid var(--rg-light);
+}
+
+.btn-merge.active {
+  background: var(--blush);
+  border-color: var(--rose);
+  color: var(--rose-deep);
+}
+
+.group-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.group-card {
+  background: white;
+  border: 1.5px solid var(--silver);
+  border-radius: 12px;
+  overflow: hidden;
+  transition: all 0.2s;
+  cursor: default;
+}
+
+.group-card.merge-mode { cursor: pointer; }
+
+.group-card.merge-mode:hover {
+  border-color: var(--rg);
+  box-shadow: 0 4px 16px rgba(201,149,108,0.15);
+}
+
+.group-card.merge-selected {
+  border-color: var(--rose);
+  box-shadow: 0 0 0 3px rgba(181,96,122,0.15);
+}
+
+.group-photos {
+  display: flex;
+  height: 100px;
+  overflow: hidden;
+}
+
+.group-photos > div {
+  flex: 1;
+  position: relative;
+  min-width: 0;
+}
+
+.group-photos img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.split-btn {
+  position: absolute;
+  top: 3px; right: 3px;
+  width: 18px; height: 18px;
+  background: rgba(0,0,0,0.65);
+  border: none;
+  border-radius: 50%;
+  color: white;
+  font-size: 9px;
+  cursor: pointer;
+  display: flex;
+  align-items:center; justify-content:center;
+  transition: background 0.2s;
+}
+
+.split-btn:hover { background: rgba(180,60,60,0.85); }
+
+.group-info {
+  padding: 12px 14px;
+  border-top: 1px solid var(--sand);
+}
+
+.group-num {
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 1px;
+  color: var(--rg);
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
+
+.group-count {
+  font-size: 11px;
+  color: var(--warm-gray);
+}
+
+/* Results */
+.results {
+  padding: 32px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.results-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 28px;
+}
+
+.results-title {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 28px;
+  font-weight: 300;
+  color: var(--rose-deep);
+}
+
+.results-total {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 20px;
+  font-weight: 300;
+  color: var(--rg);
+}
+
+.export-btn {
+  padding: 10px 22px;
+  border-radius: 8px;
+  background: var(--rose-deep);
+  color: white;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: background 0.2s;
+}
+
+.export-btn:hover { background: var(--rose); }
+.export-btn.copied { background: #4A7A50; }
+
+/* Listing card */
+.listing-card {
+  background: white;
+  border: 1px solid var(--silver);
+  border-radius: 14px;
+  margin-bottom: 16px;
+  overflow: hidden;
+  transition: box-shadow 0.2s;
+}
+
+.listing-card:hover {
+  box-shadow: 0 4px 24px rgba(201,149,108,0.12);
+}
+
+.lc-header {
+  background: linear-gradient(135deg, var(--rg-pale), var(--champagne));
+  border-bottom: 1px solid var(--rg-light);
+  padding: 14px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.lc-photos {
+  display: flex;
+  gap: 6px;
+}
+
+.lc-photos img {
+  width: 52px; height: 52px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--silver);
+}
+
+.lc-meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.lc-status {
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--rg);
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.lc-status::before {
+  content:'✓';
+  display: inline-flex;
+  align-items:center; justify-content:center;
+  width:14px; height:14px;
+  border-radius:50%;
+  background: var(--rg);
+  color: white;
+  font-size: 8px;
+}
+
+.lc-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* Price display */
+.lc-price-box {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(201,168,76,0.1);
+  border: 1px solid rgba(201,168,76,0.3);
+  border-radius: 8px;
+  padding: 6px 12px;
+}
+
+.price-euro {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 18px;
+  font-weight: 300;
+  color: var(--rg);
+}
+
+.price-input {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 28px;
+  font-weight: 300;
+  color: var(--dark);
+  width: 60px;
+  border: none;
+  outline: none;
+  background: transparent;
+}
+
+/* Copy button */
+.copy-btn {
+  padding: 7px 14px;
+  border-radius: 7px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  cursor: pointer;
+  border: 1px solid var(--silver);
+  background: var(--champagne);
+  color: var(--warm-gray);
+  transition: all 0.2s;
+}
+
+.copy-btn:hover { border-color: var(--rg); color: var(--rose-deep); }
+.copy-btn.done { background: #EBF5EB; border-color: #7AB87A; color: #3A6A3A; }
+
+/* Listing body */
+.lc-body { padding: 20px 24px; }
+
+/* Editable field */
+.field-group {
+  margin-bottom: 16px;
+}
+
+.field-label {
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--rg);
+  margin-bottom: 6px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.char-count {
+  font-size: 9px;
+  color: var(--mid-gray);
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.char-count.over { color: #C04040; }
+
+.field-input {
+  width: 100%;
+  border: 1px solid var(--sand);
+  border-radius: 7px;
+  padding: 10px 12px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--dark);
+  outline: none;
+  background: var(--off-white);
+  transition: border-color 0.2s;
+  resize: vertical;
+  line-height: 1.6;
+}
+
+.field-input:focus { border-color: var(--rg); background: white; }
+
+.meta-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.meta-select {
+  border: 1px solid var(--sand);
+  border-radius: 7px;
+  padding: 9px 10px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  color: var(--dark);
+  background: var(--off-white);
+  outline: none;
+  cursor: pointer;
+  width: 100%;
+}
+
+.meta-select:focus { border-color: var(--rg); }
+
+.tags-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.tag {
+  background: var(--rg-pale);
+  border: 1px solid var(--rg-light);
+  border-radius: 20px;
+  padding: 3px 12px;
+  font-size: 11px;
+  color: var(--rose-deep);
+}
+
+/* Spinner */
+.spinner {
+  width: 20px; height: 20px;
+  border: 2px solid var(--silver);
+  border-top-color: var(--rg);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  display: inline-block;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Pulse animation */
+@keyframes pulse {
+  0%, 100% { opacity:1; }
+  50% { opacity:0.5; }
+}
+
+.pulsing { animation: pulse 1.5s ease-in-out infinite; }
+
+/* Fade in */
+@keyframes fadeIn {
+  from { opacity:0; transform:translateY(12px); }
+  to { opacity:1; transform:translateY(0); }
+}
+
+.fade-in { animation: fadeIn 0.4s ease both; }
+
+/* Toast */
+.toast {
+  position: fixed;
+  bottom: 32px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: var(--dark);
+  color: white;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 400;
+  opacity: 0;
+  transition: all 0.3s;
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 999;
+}
+
+.toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* Gold line accent */
+.gold-accent {
+  height: 2px;
+  background: linear-gradient(90deg, var(--gold), transparent);
+  margin-bottom: 0;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--silver); border-radius: 2px; }
+
+/* Responsive */
+@media (max-width: 768px) {
+  .app { grid-template-columns: 1fr; }
+  .sidebar { display: none; }
+}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div class="logo">
+    <div class="logo-dot"></div>
+    VENTR
+  </div>
+  <div class="header-tag">AI Listing Studio · Powered by Claude</div>
+  <div class="api-status">
+    <div class="api-dot" id="apiDot"></div>
+    <span id="apiStatusText">API niet verbonden</span>
+  </div>
+</header>
+
+<div class="gold-accent"></div>
+
+<!-- APP -->
+<div class="app">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-top">
+      <div class="sidebar-label">API Sleutel</div>
+      <div class="api-field">
+        <input type="password" id="apiKey" placeholder="sk-ant-api03-..." oninput="handleApiKey(this.value)">
+        <span class="api-field-icon" onclick="toggleApiVisibility()">👁</span>
+      </div>
+      <p class="api-hint">
+        Jouw Anthropic API key. Haal op via
+        <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a> →
+        API Keys. Kosten: ~€0,03 per advertentie.
+      </p>
+    </div>
+
+    <!-- Drop zone -->
+    <div class="drop-zone" id="dropZone"
+         onclick="document.getElementById('fileInput').click()"
+         ondrop="handleDrop(event)"
+         ondragover="handleDragOver(event)"
+         ondragleave="handleDragLeave(event)">
+      <div class="drop-icon">📸</div>
+      <div class="drop-title" id="dropTitle">Foto's uploaden</div>
+      <div class="drop-sub">Sleep meerdere foto's tegelijk<br>of klik om te selecteren</div>
+    </div>
+    <input type="file" id="fileInput" multiple accept="image/*" onchange="handleFiles(this.files)">
+
+    <!-- Buttons -->
+    <button class="action-btn btn-group" id="groupBtn" onclick="startGrouping()" disabled>
+      🔍 Groepeer automatisch
+    </button>
+
+    <button class="action-btn btn-generate" id="generateBtn" onclick="generateAll()" disabled style="display:none">
+      ✨ Genereer advertenties
+    </button>
+
+    <!-- Photo list -->
+    <div class="photo-list" id="photoList"></div>
+
+    <!-- Stats -->
+    <div class="sidebar-stats">
+      <div class="stat-item">
+        <div class="stat-num" id="statPhotos">0</div>
+        <div class="stat-label">Foto's</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-num" id="statGroups">—</div>
+        <div class="stat-label">Artikelen</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-num" id="statValue">€0</div>
+        <div class="stat-label">Waarde</div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main" id="mainArea">
+    <!-- Empty state -->
+    <div class="empty-state fade-in" id="emptyState">
+      <h1 class="empty-hero">
+        Foto's in.<br>
+        Advertentie uit.<br>
+        <em>In negentig seconden.</em>
+      </h1>
+      <p class="empty-sub">
+        Upload al je productfoto's tegelijk. VENTR herkent welke bij hetzelfde artikel horen,
+        genereert de perfecte advertentie en berekent de beste prijs.
+      </p>
+      <div class="steps-row">
+        <div class="step">
+          <div class="step-circle">1</div>
+          <div class="step-text">Upload je foto's</div>
+        </div>
+        <div class="step">
+          <div class="step-circle">2</div>
+          <div class="step-text">Groepeer per artikel</div>
+        </div>
+        <div class="step">
+          <div class="step-circle">3</div>
+          <div class="step-text">Genereer advertenties</div>
+        </div>
+        <div class="step">
+          <div class="step-circle">4</div>
+          <div class="step-text">Kopieer naar Vinted</div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ── STATE ──────────────────────────────────────────────────────────────────
+
+const state = {
+  photos: [],       // {id, preview, base64, mediaType}
+  groups: [],       // {id, photoIndices, status, listing}
+  phase: 'upload',  // upload | grouping | grouped | generating | done
+  apiKey: '',
+  mergeMode: false,
+  mergeTarget: null,
+  copiedKeys: {},
+};
+
+const STATES = ['Nieuw met label','Nieuw zonder label','Zeer goed','Goed','Redelijk'];
+
+const SYSTEM = `Je bent een assistent die Vinted-advertenties schrijft voor een plus size verkoper.
+Profiel: eigen kledingkast maat 44-50 DE/NL, stijlvolle plus size kleding incl. UK-merken.
+Toon: casual, eerlijk, warm, 1-3 emoji's, geen nep-enthousiasme.
+Franse kopers: altijd vermelden 1 maat groter bestellen.
+UK-merken (Yours, Simply Be, Joe Browns, Elvi, Navabi, Eloquii): vermeld dat moeilijk verkrijgbaar in NL.
+
+Schrijfstijl: "Comfy en lekker wijd 🧸" / "Weinig gedragen, nog heel netjes!" / "Moeilijk te vinden in NL 🌸"
+
+Prijzen: H&M/Shein €4-9, Zara/Only €9-18, NL plus size (Ulla Popken, Samoon) €12-24,
+UK plus size €15-32, UK jurk/jas €20-38, onbekend goed €7-14.
+Slijtage -€3, nieuw+tags +€6, zeldzaam +€8.
+
+Je krijgt meerdere foto's van hetzelfde artikel — analyseer ze allemaal.
+
+Geef UITSLUITEND geldig JSON:
+{"titel":"...","beschrijving":"...","prijs":12,"staat":"Goed","categorie":"Tops","maat":"46 (DE/NL)","tags":["plus size"]}`;
+
+// ── HELPERS ────────────────────────────────────────────────────────────────
+
+function uid() { return Math.random().toString(36).slice(2) + Date.now(); }
+
+function readFile(file) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = e => {
+      const d = e.target.result;
+      res({ id: uid(), preview: d, base64: d.split(',')[1], mediaType: d.split(';')[0].split(':')[1] });
+    };
+    r.onerror = rej;
+    r.readAsDataURL(file);
+  });
+}
+
+function resizeForGrouping(base64, mediaType) {
+  return new Promise(res => {
+    const img = new Image();
+    img.onload = () => {
+      const MAX = 300;
+      const scale = Math.min(MAX / img.width, MAX / img.height, 1);
+      const c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(img.width * scale));
+      c.height = Math.max(1, Math.round(img.height * scale));
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      const d = c.toDataURL('image/jpeg', 0.6);
+      res({ base64: d.split(',')[1], mediaType: 'image/jpeg' });
+    };
+    img.onerror = () => res({ base64, mediaType });
+    img.src = `data:${mediaType};base64,${base64}`;
+  });
+}
+
+async function claudeCall(messages, system) {
+  const body = { model: 'claude-sonnet-4-20250514', max_tokens: 1200, messages };
+  if (system) body.system = system;
+  const r = await fetch('/api/claude', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-api-key': state.apiKey, 'anthropic-version': '2023-06-01' },
+    body: JSON.stringify(body)
+  });
+  const d = await r.json();
+  if (d.error) throw new Error(d.error.message);
+  return d.content?.find(b => b.type === 'text')?.text || '';
+}
+
+function parseJSON(text) {
+  return JSON.parse(text.replace(/```json|```/g, '').trim());
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+function copyText(text) {
+  navigator.clipboard.writeText(text);
+  showToast('✓ Gekopieerd naar klembord');
+}
+
+// ── API KEY ────────────────────────────────────────────────────────────────
+
+function handleApiKey(val) {
+  state.apiKey = val.trim();
+  const dot = document.getElementById('apiDot');
+  const txt = document.getElementById('apiStatusText');
+  const valid = val.startsWith('sk-ant') && val.length > 20;
+  dot.className = 'api-dot' + (valid ? ' connected' : '');
+  txt.textContent = valid ? 'Verbonden' : 'API niet verbonden';
+  updateButtons();
+}
+
+function toggleApiVisibility() {
+  const inp = document.getElementById('apiKey');
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+}
+
+// ── FILES ──────────────────────────────────────────────────────────────────
+
+async function handleFiles(files) {
+  if (!files.length) return;
+  const newPhotos = await Promise.all(Array.from(files).map(readFile));
+  state.photos = [...state.photos, ...newPhotos];
+  state.phase = 'upload';
+  state.groups = [];
+  renderAll();
+}
+
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('dropZone').classList.remove('drag-over');
+  handleFiles(e.dataTransfer.files);
+}
+
+function handleDragOver(e) {
+  e.preventDefault();
+  document.getElementById('dropZone').classList.add('drag-over');
+}
+
+function handleDragLeave(e) {
+  document.getElementById('dropZone').classList.remove('drag-over');
+}
+
+function removePhoto(id) {
+  state.photos = state.photos.filter(p => p.id !== id);
+  state.groups = [];
+  state.phase = 'upload';
+  renderAll();
+}
+
+// ── GROUPING ───────────────────────────────────────────────────────────────
+
+async function startGrouping() {
+  if (!state.apiKey) { showToast('Voer eerst je API sleutel in'); return; }
+  if (!state.photos.length) return;
+
+  state.phase = 'grouping';
+  renderMain();
+
+  try {
+    const small = await Promise.all(state.photos.map(p => resizeForGrouping(p.base64, p.mediaType)));
+    const content = [
+      ...small.map(s => ({ type: 'image', source: { type: 'base64', media_type: s.mediaType, data: s.base64 } })),
+      { type: 'text', text: `Je ziet ${state.photos.length} foto's (index 0 t/m ${state.photos.length - 1}). Groepeer foto's van HETZELFDE artikel (kleur, patroon, snit, label). Antwoord UITSLUITEND als JSON: {"groups":[[0,1],[2],[3,4,5]]}` }
+    ];
+    const text = await claudeCall([{ role: 'user', content }]);
+    const parsed = parseJSON(text);
+    state.groups = parsed.groups.map((indices, i) => ({
+      id: uid(),
+      photoIndices: indices.filter(n => n >= 0 && n < state.photos.length),
+      status: 'idle', listing: null
+    }));
+  } catch (err) {
+    // Fallback: each photo is own group
+    state.groups = state.photos.map((_, i) => ({ id: uid(), photoIndices: [i], status: 'idle', listing: null }));
+    showToast('Groepering mislukt — elk artikel apart');
+  }
+
+  state.phase = 'grouped';
+  renderAll();
+}
+
+function splitPhoto(groupId, photoIdx) {
+  const grp = state.groups.find(g => g.id === groupId);
+  if (!grp || grp.photoIndices.length <= 1) return;
+  state.groups = [
+    ...state.groups.map(g => g.id === groupId
+      ? { ...g, photoIndices: g.photoIndices.filter(i => i !== photoIdx), status: 'idle', listing: null }
+      : g),
+    { id: uid(), photoIndices: [photoIdx], status: 'idle', listing: null }
+  ];
+  renderMain();
+}
+
+function toggleMergeMode() {
+  state.mergeMode = !state.mergeMode;
+  state.mergeTarget = null;
+  renderMain();
+}
+
+function handleGroupClick(groupId) {
+  if (!state.mergeMode) return;
+  if (!state.mergeTarget) { state.mergeTarget = groupId; renderMain(); return; }
+  if (state.mergeTarget === groupId) { state.mergeTarget = null; renderMain(); return; }
+  const g1 = state.groups.find(g => g.id === state.mergeTarget);
+  const g2 = state.groups.find(g => g.id === groupId);
+  if (g1 && g2) {
+    state.groups = [
+      ...state.groups.filter(g => g.id !== state.mergeTarget && g.id !== groupId),
+      { id: uid(), photoIndices: [...g1.photoIndices, ...g2.photoIndices], status: 'idle', listing: null }
+    ];
+  }
+  state.mergeTarget = null;
+  state.mergeMode = false;
+  renderMain();
+}
+
+// ── GENERATION ─────────────────────────────────────────────────────────────
+
+async function generateAll() {
+  if (!state.apiKey) { showToast('Voer eerst je API sleutel in'); return; }
+  state.phase = 'generating';
+  renderMain();
+
+  for (const group of state.groups) {
+    if (group.status === 'done') continue;
+    group.status = 'processing';
+    renderSidebar();
+
+    try {
+      const gPhotos = group.photoIndices.map(i => state.photos[i]);
+      const content = [
+        ...gPhotos.map(p => ({ type: 'image', source: { type: 'base64', media_type: p.mediaType, data: p.base64 } })),
+        { type: 'text', text: `Dit zijn ${gPhotos.length} foto's van hetzelfde artikel. Genereer een Vinted advertentie. Antwoord ALLEEN als JSON.` }
+      ];
+      const text = await claudeCall([{ role: 'user', content }], SYSTEM);
+      group.listing = parseJSON(text);
+      group.status = 'done';
+    } catch {
+      group.status = 'error';
+    }
+    renderSidebar();
+    updateStats();
+  }
+
+  state.phase = 'done';
+  renderMain();
+}
+
+function updateListing(groupId, field, value) {
+  const g = state.groups.find(g => g.id === groupId);
+  if (g && g.listing) { g.listing[field] = value; updateStats(); }
+}
+
+// ── EXPORT ─────────────────────────────────────────────────────────────────
+
+function exportAll() {
+  const done = state.groups.filter(g => g.status === 'done');
+  const text = done.map(g => {
+    const l = g.listing;
+    return `━━━━━━━━━━━━━━━━━━━━\n${l.titel}\n\n${l.beschrijving}\n\nStaat: ${l.staat}  |  Maat: ${l.maat}  |  Categorie: ${l.categorie}\nPrijs: €${l.prijs}\n`;
+  }).join('\n');
+  copyText(text);
+}
+
+function copyListing(groupId) {
+  const g = state.groups.find(g => g.id === groupId);
+  if (!g?.listing) return;
+  const l = g.listing;
+  copyText(`${l.titel}\n\n${l.beschrijving}\n\nStaat: ${l.staat}\nMaat: ${l.maat}\nCategorie: ${l.categorie}\nPrijs: €${l.prijs}`);
+}
+
+// ── RENDER ─────────────────────────────────────────────────────────────────
+
+function renderAll() {
+  renderSidebar();
+  renderMain();
+  updateButtons();
+  updateStats();
+}
+
+function updateButtons() {
+  const hasKey = state.apiKey.startsWith('sk-ant') && state.apiKey.length > 20;
+  const hasPhotos = state.photos.length > 0;
+  const gb = document.getElementById('groupBtn');
+  const genb = document.getElementById('generateBtn');
+
+  gb.disabled = !hasKey || !hasPhotos || state.phase === 'grouping';
+  gb.style.display = state.phase === 'upload' ? 'flex' : 'none';
+
+  genb.disabled = !hasKey;
+  genb.style.display = state.phase === 'grouped' ? 'flex' : 'none';
+  if (genb.style.display === 'flex') {
+    genb.textContent = `✨ Genereer ${state.groups.length} advertenties`;
+  }
+}
+
+function updateStats() {
+  document.getElementById('statPhotos').textContent = state.photos.length;
+  document.getElementById('statGroups').textContent = state.groups.length || '—';
+  const total = state.groups.filter(g => g.status === 'done').reduce((s, g) => s + (g.listing?.prijs || 0), 0);
+  document.getElementById('statValue').textContent = total > 0 ? `€${total}` : '€0';
+}
+
+function renderSidebar() {
+  const list = document.getElementById('photoList');
+
+  if (state.phase === 'upload') {
+    list.innerHTML = state.photos.map((p, i) => `
+      <div class="photo-thumb" id="pt_${p.id}">
+        <img src="${p.preview}" alt="">
+        <button class="photo-remove" onclick="removePhoto('${p.id}')">×</button>
+        <div class="photo-badge badge-idle">#${i}</div>
+      </div>
+    `).join('');
+  } else {
+    list.innerHTML = state.groups.map((g, gi) => {
+      const first = state.photos[g.photoIndices[0]];
+      const badgeClass = {idle:'badge-idle',processing:'badge-processing',done:'badge-done',error:'badge-error'}[g.status];
+      const badgeText = {idle:'⏸',processing:'⏳',done:'✅',error:'❌'}[g.status];
+      return `
+        <div class="photo-thumb ${g.status === 'done' ? 'active' : ''}" onclick="scrollToGroup('${g.id}')">
+          ${first ? `<img src="${first.preview}" alt="">` : ''}
+          <div class="photo-badge ${badgeClass}">${badgeText} ${g.photoIndices.length}f</div>
+          ${g.listing ? `<div class="photo-price">€${g.listing.prijs}</div>` : ''}
+        </div>
+      `;
+    }).join('');
+  }
+  updateStats();
+}
+
+function scrollToGroup(groupId) {
+  const el = document.getElementById('gc_' + groupId);
+  if (el) el.scrollIntoView({ behavior:'smooth', block:'center' });
+}
+
+function renderMain() {
+  const main = document.getElementById('mainArea');
+  updateButtons();
+
+  if (state.phase === 'upload') {
+    main.innerHTML = state.photos.length === 0 ? renderEmpty() : renderUploadedState();
+    return;
+  }
+
+  if (state.phase === 'grouping') {
+    main.innerHTML = `
+      <div class="progress-state fade-in">
+        <div style="font-size:42px">🔍</div>
+        <div class="progress-title">Foto's groeperen...</div>
+        <div class="progress-sub">Claude analyseert welke foto's bij hetzelfde artikel horen</div>
+        <div class="spinner"></div>
+      </div>`;
+    return;
+  }
+
+  if (state.phase === 'grouped') {
+    main.innerHTML = renderGroupReview();
+    return;
+  }
+
+  if (state.phase === 'generating' || state.phase === 'done') {
+    main.innerHTML = renderResults();
+    return;
+  }
+}
+
+function renderEmpty() {
+  return `
+    <div class="empty-state fade-in">
+      <h1 class="empty-hero">
+        Foto's in.<br>Advertentie uit.<br>
+        <em>In negentig seconden.</em>
+      </h1>
+      <p class="empty-sub">Upload al je productfoto's tegelijk. VENTR herkent welke bij hetzelfde artikel horen, genereert de perfecte advertentie en berekent de beste prijs.</p>
+      <div class="steps-row">
+        ${[['1','Upload je foto\'s'],['2','Groepeer per artikel'],['3','Genereer advertenties'],['4','Kopieer naar Vinted']].map(([n,t]) => `
+          <div class="step"><div class="step-circle">${n}</div><div class="step-text">${t}</div></div>
+        `).join('')}
+      </div>
+    </div>`;
+}
+
+function renderUploadedState() {
+  return `
+    <div class="empty-state fade-in">
+      <div style="font-size:42px">📸</div>
+      <h1 class="empty-hero" style="font-size:clamp(28px,3vw,44px)">
+        ${state.photos.length} foto${state.photos.length !== 1 ? "'s" : ""} geladen
+      </h1>
+      <p class="empty-sub">Voer je API sleutel in en klik op "Groepeer automatisch" om te beginnen.</p>
+    </div>`;
+}
+
+function renderGroupReview() {
+  const mergeBtn = state.mergeMode
+    ? `<button class="btn-sm btn-merge active" onclick="toggleMergeMode()">${state.mergeTarget ? '⇢ Kies 2e groep' : '⇢ Kies 1e groep'}</button>`
+    : `<button class="btn-sm btn-merge" onclick="toggleMergeMode()">🔗 Samenvoegen</button>`;
+
+  const cards = state.groups.map((g, gi) => {
+    const isSelected = state.mergeTarget === g.id;
+    return `
+      <div class="group-card ${state.mergeMode ? 'merge-mode' : ''} ${isSelected ? 'merge-selected' : ''} fade-in"
+           id="gc_${g.id}" onclick="handleGroupClick('${g.id}')">
+        <div class="group-photos">
+          ${g.photoIndices.map(idx => {
+            const p = state.photos[idx];
+            return `<div>
+              ${p ? `<img src="${p.preview}" alt="">` : ''}
+              ${!state.mergeMode && g.photoIndices.length > 1 ? `<button class="split-btn" onclick="event.stopPropagation();splitPhoto('${g.id}',${idx})" title="Splitsen">✂</button>` : ''}
+            </div>`;
+          }).join('')}
+        </div>
+        <div class="group-info">
+          <div class="group-num">Artikel ${gi + 1}</div>
+          <div class="group-count">${g.photoIndices.length} foto${g.photoIndices.length !== 1 ? "'s" : ""}</div>
+        </div>
+      </div>`;
+  }).join('');
+
+  return `
+    <div class="group-review fade-in">
+      <div class="gr-header">
+        <div>
+          <div class="gr-title">🔍 ${state.groups.length} artikelen gedetecteerd</div>
+          <div class="gr-sub">Controleer of de groepering klopt. Klik ✂ om een foto te splitsen. Gebruik "Samenvoegen" om groepen te combineren.</div>
+        </div>
+        <div class="gr-actions">
+          <button class="btn-sm btn-confirm" onclick="generateAll()">✨ Ziet er goed uit — genereer</button>
+          ${mergeBtn}
+        </div>
+      </div>
+      <div class="group-grid">${cards}</div>
+    </div>`;
+}
+
+function renderResults() {
+  const done = state.groups.filter(g => g.status === 'done');
+  const total = done.reduce((s, g) => s + (g.listing?.prijs || 0), 0);
+
+  const cards = state.groups.map((g, gi) => {
+    if (g.status === 'processing') {
+      return `<div class="listing-card fade-in" id="gc_${g.id}">
+        <div class="lc-header">
+          <div class="lc-photos">
+            ${g.photoIndices.slice(0,3).map(i => state.photos[i] ? `<img src="${state.photos[i].preview}">` : '').join('')}
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;color:var(--warm-gray);font-size:12px;">
+            <div class="spinner"></div> Advertentie genereren...
+          </div>
+        </div>
+      </div>`;
+    }
+
+    if (g.status === 'error') {
+      return `<div class="listing-card fade-in" id="gc_${g.id}">
+        <div class="lc-header" style="background:var(--blush)">
+          <div>Artikel ${gi + 1} — genereren mislukt</div>
+        </div>
+      </div>`;
+    }
+
+    if (!g.listing) return '';
+
+    const l = g.listing;
+    return `
+      <div class="listing-card fade-in" id="gc_${g.id}">
+        <div class="lc-header">
+          <div class="lc-photos">
+            ${g.photoIndices.slice(0,4).map(i => state.photos[i] ? `<img src="${state.photos[i].preview}" alt="">` : '').join('')}
+          </div>
+          <div class="lc-meta">
+            <div class="lc-status">Advertentie klaar · ${g.photoIndices.length} foto${g.photoIndices.length !== 1 ? "'s" : ""}</div>
+            <div class="lc-price-box" style="display:inline-flex;margin-top:4px">
+              <span class="price-euro">€</span>
+              <input class="price-input" type="number" value="${l.prijs}"
+                oninput="updateListing('${g.id}','prijs',+this.value)">
+            </div>
+          </div>
+          <div class="lc-actions">
+            <button class="copy-btn" onclick="copyListing('${g.id}')">📋 Kopieer alles</button>
+          </div>
+        </div>
+        <div class="lc-body">
+          <div class="field-group">
+            <div class="field-label">
+              Titel
+              <span class="char-count ${(l.titel?.length||0)>50?'over':''}">${l.titel?.length||0}/50</span>
+            </div>
+            <input class="field-input" type="text" value="${escHtml(l.titel||'')}"
+              oninput="updateListing('${g.id}','titel',this.value)">
+          </div>
+          <div class="field-group">
+            <div class="field-label">Beschrijving</div>
+            <textarea class="field-input" rows="4"
+              oninput="updateListing('${g.id}','beschrijving',this.value)">${escHtml(l.beschrijving||'')}</textarea>
+          </div>
+          <div class="meta-row">
+            <div class="field-group" style="margin-bottom:0">
+              <div class="field-label">Staat</div>
+              <select class="meta-select" onchange="updateListing('${g.id}','staat',this.value)">
+                ${STATES.map(s => `<option ${s===l.staat?'selected':''}>${s}</option>`).join('')}
+              </select>
+            </div>
+            <div class="field-group" style="margin-bottom:0">
+              <div class="field-label">Maat</div>
+              <input class="field-input meta-select" type="text" value="${escHtml(l.maat||'')}"
+                oninput="updateListing('${g.id}','maat',this.value)" style="height:auto">
+            </div>
+            <div class="field-group" style="margin-bottom:0">
+              <div class="field-label">Categorie</div>
+              <input class="field-input meta-select" type="text" value="${escHtml(l.categorie||'')}"
+                oninput="updateListing('${g.id}','categorie',this.value)" style="height:auto">
+            </div>
+          </div>
+          ${l.tags?.length ? `<div class="tags-row" style="margin-top:12px">${l.tags.map(t => `<span class="tag">#${t}</span>`).join('')}</div>` : ''}
+        </div>
+      </div>`;
+  }).join('');
+
+  const isGenerating = state.phase === 'generating';
+
+  return `
+    <div class="results fade-in">
+      <div class="results-header">
+        <div>
+          <div class="results-title">${isGenerating ? `⏳ ${done.length}/${state.groups.length} advertenties klaar` : `✅ ${done.length} advertenties`}</div>
+          ${isGenerating ? `<div style="margin-top:8px"><div class="progress-bar-wrap"><div class="progress-bar-fill" style="width:${state.groups.length?(done.length/state.groups.length*100):0}%"></div></div></div>` : ''}
+        </div>
+        <div style="display:flex;align-items:center;gap:12px">
+          ${done.length > 0 ? `<span class="results-total">€${total} totaal</span>` : ''}
+          ${done.length > 0 ? `<button class="export-btn" onclick="exportAll()">📋 Exporteer alle (${done.length})</button>` : ''}
+        </div>
+      </div>
+      ${cards}
+    </div>`;
+}
+
+function escHtml(str) {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── INIT ───────────────────────────────────────────────────────────────────
+renderAll();
+</script>
+</body>
+</html>
