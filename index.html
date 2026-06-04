@@ -907,6 +907,38 @@ input[type=file] { display:none; }
   margin-bottom: 0;
 }
 
+/* ── DRAG & DROP ── */
+.photo-drag-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  cursor: grab;
+  transition: opacity 0.15s;
+}
+.photo-drag-wrap:active { cursor: grabbing; }
+.photo-drag-wrap img { width:100%; height:100%; object-fit:cover; display:block; pointer-events:none; }
+.photo-drag-wrap.dragging { opacity: 0.3; }
+
+.drag-hint {
+  position: absolute;
+  top: 4px; right: 4px;
+  font-size: 14px;
+  color: white;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.6);
+  opacity: 0;
+  transition: opacity 0.15s;
+  pointer-events: none;
+  line-height: 1;
+}
+.photo-drag-wrap:hover .drag-hint { opacity: 1; }
+
+.group-card.drop-over {
+  border-color: var(--rose);
+  box-shadow: 0 0 0 3px rgba(181,96,122,0.2);
+  transform: scale(1.02);
+  transition: all 0.15s;
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -1745,45 +1777,139 @@ function renderUploadedState() {
     </div>`;
 }
 
-function renderGroupReview() {
-  const mergeBtn = state.mergeMode
-    ? `<button class="btn-sm btn-merge active" onclick="toggleMergeMode()">${state.mergeTarget ? '⇢ Kies 2e groep' : '⇢ Kies 1e groep'}</button>`
-    : `<button class="btn-sm btn-merge" onclick="toggleMergeMode()">🔗 Samenvoegen</button>`;
+// ── DRAG & DROP GROEPERING ─────────────────────────────────────────────────
 
-  const cards = state.groups.map((g, gi) => {
-    const isSelected = state.mergeTarget === g.id;
-    return `
-      <div class="group-card ${state.mergeMode ? 'merge-mode' : ''} ${isSelected ? 'merge-selected' : ''} fade-in"
-           id="gc_${g.id}" onclick="handleGroupClick('${g.id}')">
-        <div class="group-photos">
-          ${g.photoIndices.map(idx => {
-            const p = state.photos[idx];
-            return `<div>
-              ${p ? `<img src="${p.preview}" alt="">` : ''}
-              ${!state.mergeMode && g.photoIndices.length > 1 ? `<button class="split-btn" onclick="event.stopPropagation();splitPhoto('${g.id}',${idx})" title="Splitsen">✂</button>` : ''}
+let drag = null; // { photoIdx, fromGroupId }
+
+function onPhotoDragStart(e, groupId, photoIdx) {
+  drag = { photoIdx, fromGroupId: groupId };
+  e.dataTransfer.effectAllowed = 'move';
+  e.currentTarget.classList.add('dragging');
+}
+
+function onPhotoDragEnd(e) {
+  e.currentTarget.classList.remove('dragging');
+  document.querySelectorAll('.group-card').forEach(c => c.classList.remove('drop-over'));
+  drag = null;
+}
+
+function onGroupDragOver(e, groupId) {
+  if (!drag || drag.fromGroupId === groupId) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  document.querySelectorAll('.group-card').forEach(c => c.classList.remove('drop-over'));
+  document.getElementById('gc_' + groupId)?.classList.add('drop-over');
+}
+
+function onGroupDragLeave(e, groupId) {
+  // Alleen verwijderen als echt buiten de kaart
+  if (!e.currentTarget.contains(e.relatedTarget)) {
+    document.getElementById('gc_' + groupId)?.classList.remove('drop-over');
+  }
+}
+
+function onGroupDrop(e, targetGroupId) {
+  e.preventDefault();
+  document.querySelectorAll('.group-card').forEach(c => c.classList.remove('drop-over'));
+  if (!drag || drag.fromGroupId === targetGroupId) { drag = null; return; }
+
+  const { photoIdx, fromGroupId } = drag;
+  drag = null;
+
+  const from = state.groups.find(g => g.id === fromGroupId);
+  const to   = state.groups.find(g => g.id === targetGroupId);
+  if (!from || !to) return;
+
+  from.photoIndices = from.photoIndices.filter(i => i !== photoIdx);
+  from.status = 'idle'; from.listing = null;
+  to.photoIndices = [...to.photoIndices, photoIdx];
+  to.status = 'idle'; to.listing = null;
+
+  // Lege groepen verwijderen
+  state.groups = state.groups.filter(g => g.photoIndices.length > 0);
+  renderMain();
+}
+
+// Sleep naar lege ruimte = nieuwe groep
+function onGridDragOver(e) {
+  if (!drag) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'copy';
+}
+
+function onGridDrop(e) {
+  if (!drag) return;
+  e.preventDefault();
+  // Kijk of we op een kaart droppen (dan afhandelen via onGroupDrop)
+  if (e.target.closest('.group-card')) return;
+
+  const { photoIdx, fromGroupId } = drag;
+  drag = null;
+
+  const from = state.groups.find(g => g.id === fromGroupId);
+  if (!from || from.photoIndices.length <= 1) return;
+
+  from.photoIndices = from.photoIndices.filter(i => i !== photoIdx);
+  from.status = 'idle'; from.listing = null;
+  state.groups.push({ id: uid(), photoIndices: [photoIdx], status: 'idle', listing: null });
+  state.groups = state.groups.filter(g => g.photoIndices.length > 0);
+  renderMain();
+}
+
+function renderGroupReview() {
+  const cards = state.groups.map((g, gi) => `
+    <div class="group-card fade-in"
+         id="gc_${g.id}"
+         ondragover="onGroupDragOver(event,'${g.id}')"
+         ondragleave="onGroupDragLeave(event,'${g.id}')"
+         ondrop="onGroupDrop(event,'${g.id}')">
+      <div class="group-photos">
+        ${g.photoIndices.map(idx => {
+          const p = state.photos[idx];
+          return `
+            <div class="photo-drag-wrap"
+                 draggable="true"
+                 ondragstart="onPhotoDragStart(event,'${g.id}',${idx})"
+                 ondragend="onPhotoDragEnd(event)">
+              ${p ? `<img src="${p.preview}" alt="" draggable="false">` : ''}
+              <div class="drag-hint">⠿</div>
             </div>`;
-          }).join('')}
-        </div>
-        <div class="group-info">
-          <div class="group-num">Artikel ${gi + 1}</div>
-          <div class="group-count">${g.photoIndices.length} foto${g.photoIndices.length !== 1 ? "'s" : ""}</div>
-        </div>
-      </div>`;
-  }).join('');
+        }).join('')}
+      </div>
+      <div class="group-info">
+        <div class="group-num">Artikel ${gi + 1}</div>
+        <div class="group-count">${g.photoIndices.length} foto${g.photoIndices.length !== 1 ? "'s" : ""} · sleep om te hergroeperen</div>
+      </div>
+    </div>`
+  ).join('');
 
   return `
     <div class="group-review fade-in">
       <div class="gr-header">
         <div>
           <div class="gr-title">🔍 ${state.groups.length} artikelen gedetecteerd</div>
-          <div class="gr-sub">Controleer of de groepering klopt. Klik ✂ om een foto te splitsen. Gebruik "Samenvoegen" om groepen te combineren.</div>
+          <div class="gr-sub">
+            Sleep foto's tussen artikelen om te hergroeperen.
+            Sleep naar lege ruimte om een nieuw artikel aan te maken.
+          </div>
         </div>
         <div class="gr-actions">
           <button class="btn-sm btn-confirm" onclick="generateAll()">✨ Ziet er goed uit — genereer</button>
-          ${mergeBtn}
         </div>
       </div>
-      <div class="group-grid">${cards}</div>
+      <div class="group-grid"
+           ondragover="onGridDragOver(event)"
+           ondrop="onGridDrop(event)">
+        ${cards}
+        <div class="group-card group-card-new" id="gc_new"
+             ondragover="onGroupDragOver(event,'__new__')"
+             ondrop="onGridDrop(event)"
+             style="border-style:dashed;opacity:0.5;display:flex;align-items:center;justify-content:center;min-height:120px;cursor:default">
+          <div style="text-align:center;color:var(--warm-gray);font-size:12px;">
+            ＋<br>Sleep hier voor<br>nieuw artikel
+          </div>
+        </div>
+      </div>
     </div>`;
 }
 
