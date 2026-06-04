@@ -1550,6 +1550,21 @@ function copyListing(groupId) {
   copyText(`${l.titel}\n\n${l.beschrijving}\n\nStaat: ${l.staat}\nMaat: ${l.maat}\nCategorie: ${l.categorie}\nPrijs: €${l.prijs}`);
 }
 
+function downloadPhotos(groupId) {
+  const g = state.groups.find(g => g.id === groupId);
+  if (!g) return;
+  const titel = g.listing?.titel?.slice(0, 30).replace(/[^a-zA-Z0-9\s]/g, '').trim() || `artikel-${groupId.slice(0,6)}`;
+  g.photoIndices.forEach((idx, i) => {
+    const photo = state.photos[idx];
+    if (!photo) return;
+    const a = document.createElement('a');
+    a.href = photo.preview;
+    a.download = `${titel}-foto${i + 1}.jpg`;
+    a.click();
+  });
+  showToast(`📥 ${g.photoIndices.length} foto's gedownload`);
+}
+
 // ── RENDER ─────────────────────────────────────────────────────────────────
 
 function renderAll() {
@@ -1774,7 +1789,8 @@ function renderResults() {
             </div>
           </div>
           <div class="lc-actions">
-            <button class="copy-btn" onclick="copyListing('${g.id}')">📋 Kopieer alles</button>
+            <button class="copy-btn" onclick="downloadPhotos('${g.id}')">📥 Download foto's</button>
+            <button class="copy-btn" onclick="copyListing('${g.id}')">📋 Kopieer tekst</button>
           </div>
         </div>
         <div class="lc-body">
