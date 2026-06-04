@@ -1687,43 +1687,66 @@ window.addEventListener('message', e => {
     showToast('✅ VENTR Connect extensie actief');
   }
   if (e.data?.type === 'VENTR_ADD_TO_QUEUE_RESPONSE') {
-    const count = e.data.count || 0;
-    showToast(`✅ In wachtrij gezet · ${count} totaal`);
+    showToast(`✅ In wachtrij gezet · ${e.data.count || 0} totaal`);
+  }
+  if (e.data?.type === 'VENTR_ADD_BATCH_TO_QUEUE_RESPONSE') {
+    showToast(`✅ ${e.data.count || 0} advertenties in wachtrij — open Vinted om te plaatsen`);
   }
 });
 
-function addToQueue(groupId) {
+async function photoToQueueThumb(photo) {
+  // Verklein foto voor wachtrij opslag (max 400px, kwaliteit 0.7)
+  return new Promise(res => {
+    const img = new Image();
+    img.onload = () => {
+      const MAX = 400;
+      const scale = Math.min(MAX / img.width, MAX / img.height, 1);
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.width * scale);
+      c.height = Math.round(img.height * scale);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      res({ preview: c.toDataURL('image/jpeg', 0.7) });
+    };
+    img.onerror = () => res({ preview: photo.preview });
+    img.src = photo.preview;
+  });
+}
+
+async function addToQueue(groupId) {
   const g = state.groups.find(g => g.id === groupId);
   if (!g?.listing) return;
-
   if (!state_ext.ready) {
     showToast('⚠️ VENTR Connect extensie niet gevonden — installeer hem eerst');
     return;
   }
-
-  const photos = g.photoIndices
-    .map(i => state.photos[i])
-    .filter(Boolean)
-    .map(p => ({ preview: p.preview }));
-
+  const photos = await Promise.all(
+    g.photoIndices.map(i => state.photos[i]).filter(Boolean).map(photoToQueueThumb)
+  );
   window.postMessage({
     type: 'VENTR_ADD_TO_QUEUE',
-    item: {
-      id: g.id,
-      listing: g.listing,
-      photos,
-    }
+    item: { id: g.id, listing: g.listing, photos }
   }, '*');
 }
 
-function addAllToQueue() {
+async function addAllToQueue() {
   if (!state_ext.ready) {
     showToast('⚠️ VENTR Connect extensie niet gevonden');
     return;
   }
   const done = state.groups.filter(g => g.status === 'done');
-  done.forEach(g => addToQueue(g.id));
-  showToast(`📥 ${done.length} advertenties naar wachtrij`);
+  if (!done.length) { showToast('Geen afgeronde advertenties'); return; }
+
+  showToast(`📥 ${done.length} advertenties naar wachtrij...`);
+
+  // Stuur als één batch — betrouwbaarder dan losse berichten
+  const items = await Promise.all(done.map(async g => {
+    const photos = await Promise.all(
+      g.photoIndices.map(i => state.photos[i]).filter(Boolean).map(photoToQueueThumb)
+    );
+    return { id: g.id, listing: g.listing, photos };
+  }));
+
+  window.postMessage({ type: 'VENTR_ADD_BATCH_TO_QUEUE', items }, '*');
 }
 
 function downloadPhotos(groupId) {

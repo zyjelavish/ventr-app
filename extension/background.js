@@ -8,6 +8,17 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true;
   }
 
+  if (msg.type === 'VENTR_ADD_BATCH_TO_QUEUE') {
+    (async () => {
+      let queue;
+      for (const item of msg.items) {
+        queue = await addToQueue(item);
+      }
+      sendResponse({ ok: true, count: (queue || []).filter(q => q.status === 'pending').length });
+    })();
+    return true;
+  }
+
   if (msg.type === 'VENTR_GET_QUEUE') {
     getQueue().then(queue => sendResponse({ queue }));
     return true;
