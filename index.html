@@ -1034,6 +1034,98 @@ input[type=file] { display:none; }
   background: var(--rg-pale);
 }
 
+/* ── LOGIN OVERLAY ── */
+#loginOverlay {
+  position: fixed; inset: 0; z-index: 99999;
+  background: linear-gradient(135deg, #FDF8F2 0%, #F5EBE0 50%, #EDD9C8 100%);
+  display: flex; align-items: center; justify-content: center;
+}
+
+.login-card {
+  background: white;
+  border: 1px solid var(--rg-light);
+  border-radius: 20px;
+  padding: 48px 40px;
+  width: 360px;
+  box-shadow: 0 20px 60px rgba(125,60,82,0.15);
+  text-align: center;
+}
+
+.login-logo {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 32px; font-weight: 600;
+  letter-spacing: 8px; color: var(--rose-deep);
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  margin-bottom: 8px;
+}
+
+.login-sub {
+  font-size: 11px; color: var(--warm-gray);
+  letter-spacing: 2px; text-transform: uppercase;
+  margin-bottom: 36px;
+}
+
+.login-field {
+  position: relative; margin-bottom: 14px;
+}
+
+.login-field input {
+  width: 100%; padding: 14px 16px;
+  border: 1.5px solid var(--silver); border-radius: 10px;
+  font-family: 'DM Sans', sans-serif; font-size: 14px;
+  outline: none; background: var(--off-white);
+  transition: border-color 0.2s; text-align: center;
+  letter-spacing: 3px;
+}
+
+.login-field input:focus { border-color: var(--rg); background: white; }
+.login-field input::placeholder { letter-spacing: 1px; }
+
+.login-btn {
+  width: 100%; padding: 14px;
+  background: linear-gradient(135deg, var(--rose-deep), var(--rg));
+  color: white; border: none; border-radius: 10px;
+  font-family: 'DM Sans', sans-serif; font-size: 13px;
+  font-weight: 600; letter-spacing: 2px; text-transform: uppercase;
+  cursor: pointer; transition: opacity 0.2s; margin-top: 4px;
+}
+
+.login-btn:hover { opacity: 0.9; }
+.login-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.login-error {
+  color: #C04040; font-size: 12px;
+  margin-top: 10px; min-height: 18px;
+}
+
+/* ── PLATFORM SELECTOR ── */
+.platform-tabs {
+  display: flex; gap: 2px;
+  background: var(--sand);
+  border-radius: 8px; padding: 3px;
+}
+
+.platform-tab {
+  padding: 5px 14px; border-radius: 6px;
+  font-size: 11px; font-weight: 600;
+  letter-spacing: 1px; text-transform: uppercase;
+  cursor: pointer; border: none;
+  font-family: 'DM Sans', sans-serif;
+  transition: all 0.2s;
+  color: var(--warm-gray); background: transparent;
+}
+
+.platform-tab.active {
+  background: white;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+}
+
+.platform-tab.vinted.active  { color: var(--rose-deep); }
+.platform-tab.markt.active   { color: #1A5276; }
+
+/* Marktplaats accent kleur */
+body.platform-markt { --rg: #2E86C1; --rg-light: #AED6F1; --rg-pale: #EBF5FB; --rose-deep: #1A5276; --rose: #2E86C1; }
+
 /* Scrollbar */
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -1048,16 +1140,37 @@ input[type=file] { display:none; }
 </head>
 <body>
 
+<!-- LOGIN OVERLAY -->
+<div id="loginOverlay">
+  <div class="login-card">
+    <div class="login-logo">
+      <span style="width:8px;height:8px;border-radius:50%;background:var(--gold);display:inline-block"></span>
+      VENTR
+    </div>
+    <div class="login-sub">Private Access</div>
+    <div class="login-field">
+      <input type="password" id="loginPass" placeholder="Wachtwoord"
+             onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <button class="login-btn" id="loginBtn" onclick="doLogin()">Inloggen</button>
+    <div class="login-error" id="loginError"></div>
+  </div>
+</div>
+
 <!-- HEADER -->
 <header>
   <div class="logo">
     <div class="logo-dot"></div>
     VENTR
   </div>
-  <div class="header-tag">AI Listing Studio · Powered by Claude</div>
+  <div class="platform-tabs">
+    <button class="platform-tab vinted active" id="tabVinted" onclick="setPlatform('vinted')">Vinted</button>
+    <button class="platform-tab markt" id="tabMarkt" onclick="setPlatform('marktplaats')">Marktplaats</button>
+  </div>
   <div class="api-status">
     <div class="api-dot" id="apiDot"></div>
     <span id="apiStatusText">API niet verbonden</span>
+    <span style="margin-left:12px;font-size:10px;color:var(--mid-gray);cursor:pointer" onclick="doLogout()">Uitloggen</span>
   </div>
 </header>
 
@@ -1180,6 +1293,80 @@ input[type=file] { display:none; }
 <script>
 // ── STATE ──────────────────────────────────────────────────────────────────
 
+// ── AUTH ────────────────────────────────────────────────────────────────────
+
+async function checkAuth() {
+  const token = localStorage.getItem('ventr_auth');
+  if (!token) { showLoginOverlay(); return; }
+  try {
+    const r = await fetch('/api/auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token })
+    });
+    const d = await r.json();
+    if (d.ok) hideLoginOverlay();
+    else showLoginOverlay();
+  } catch { hideLoginOverlay(); }
+}
+
+async function doLogin() {
+  const pass = document.getElementById('loginPass').value;
+  const btn  = document.getElementById('loginBtn');
+  const err  = document.getElementById('loginError');
+  if (!pass) return;
+  btn.disabled = true; btn.textContent = '...';
+  try {
+    const r = await fetch('/api/auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: pass })
+    });
+    const d = await r.json();
+    if (d.ok) {
+      localStorage.setItem('ventr_auth', d.token);
+      hideLoginOverlay();
+    } else {
+      err.textContent = 'Onjuist wachtwoord 🔒';
+      document.getElementById('loginPass').value = '';
+    }
+  } catch {
+    err.textContent = 'Verbindingsfout — probeer opnieuw';
+  }
+  btn.disabled = false; btn.textContent = 'Inloggen';
+}
+
+function doLogout() {
+  localStorage.removeItem('ventr_auth');
+  showLoginOverlay();
+}
+
+function showLoginOverlay() {
+  const o = document.getElementById('loginOverlay');
+  if (o) o.style.display = 'flex';
+}
+
+function hideLoginOverlay() {
+  const o = document.getElementById('loginOverlay');
+  if (o) o.style.display = 'none';
+}
+
+// ── PLATFORM ─────────────────────────────────────────────────────────────────
+
+let currentPlatform = localStorage.getItem('ventr_platform') || 'vinted';
+
+function setPlatform(platform) {
+  currentPlatform = platform;
+  localStorage.setItem('ventr_platform', platform);
+  document.getElementById('tabVinted').classList.toggle('active', platform === 'vinted');
+  document.getElementById('tabMarkt').classList.toggle('active', platform === 'marktplaats');
+  document.body.classList.toggle('platform-markt', platform === 'marktplaats');
+  // Reset sessie bij switch
+  state.photos = []; state.groups = []; state.phase = 'upload';
+  renderAll();
+  showToast(platform === 'vinted' ? '🌸 Vinted modus' : '🏠 Marktplaats modus');
+}
+
 const MODEL_FAST  = 'claude-haiku-4-5-20251001'; // groepering: snel & goedkoop
 const MODEL_SMART = 'claude-sonnet-4-6';          // generatie: hoge kwaliteit
 
@@ -1257,6 +1444,29 @@ Voorbeelden: #plussize #dames #jurk #zomer #ukfashion #maat46 #simpelybe #vintag
 
 Geef UITSLUITEND geldig JSON (geen uitleg, geen markdown):
 {"titel":"...","beschrijving":"...","prijs":12,"staat":"Goed","categorie":"Tops","maat":"46 DE/NL / UK 18 / FR 48","tags":["plus size","dames"],"merk":"...","materiaal":"...","cover_index":0}`;
+
+const SYSTEM_MARKTPLAATS = `Je bent een expert die Marktplaats.nl advertenties schrijft voor plus size dameskleding.
+Profiel: eigen kledingkast maat 44-50 DE/NL.
+
+MARKTPLAATS REGELS:
+- Titel: bondig en direct. Formule: [Merk] [kledingstuk] [maat] [kleur] — max 60 tekens.
+- Beschrijving: max 5 zinnen. Eerlijk, zakelijk, geen overdrijving.
+- Max 1 emoji per advertentie — alleen als het echt past.
+- Marktplaats kopers zijn prijsbewuster dan Vinted → prijs 10-20% lager dan Vinted-prijs.
+- Verzending: vermeld altijd "Verzending mogelijk via PostNL, kosten voor koper."
+- Geen Franse opmerkingen, geen hashtags.
+- UK-merken: vermeld "Moeilijk verkrijgbaar in NL" — rechtvaardigt hogere prijs.
+- Staat opties: "Zo goed als nieuw" / "Goed" / "Redelijk" / "Matig"
+
+PRIJSSTRATEGIE MARKTPLAATS:
+- H&M/Primark: €3-7 · Zara/Only: €7-13 · NL plus size: €10-20 · UK plus size: €12-24 · UK premium: €18-32
+
+Geef UITSLUITEND geldig JSON:
+{"titel":"...","beschrijving":"...","prijs":10,"staat":"Goed","categorie":"Dames | Tops","maat":"46","merk":"...","materiaal":"...","cover_index":0}`;
+
+function getSystemPrompt() {
+  return currentPlatform === 'marktplaats' ? SYSTEM_MARKTPLAATS : SYSTEM;
+}
 
 // ── HELPERS ────────────────────────────────────────────────────────────────
 
@@ -1667,7 +1877,7 @@ async function generateAll() {
         ...resized.map(r => ({ type: 'image', source: { type: 'base64', media_type: r.mediaType, data: r.base64 } })),
         { type: 'text', text: `Dit zijn ${resized.length} foto's van hetzelfde kledingstuk. Analyseer alles zorgvuldig: kleur, stof, patroon, snit, zichtbare labels, staat van het artikel. Genereer een Vinted-advertentie die maximaal verkoopt. Antwoord UITSLUITEND als JSON.` }
       ];
-      const text = await claudeCall([{ role: 'user', content }], SYSTEM, MODEL_SMART);
+      const text = await claudeCall([{ role: 'user', content }], getSystemPrompt(), MODEL_SMART);
       group.listing = parseJSON(text);
       // Zet beste foto vooraan op basis van cover_index
       const ci = group.listing.cover_index;
@@ -2608,14 +2818,18 @@ function escHtml(str) {
 }
 
 // ── INIT ───────────────────────────────────────────────────────────────────
-if (state.apiKey) {
-  const inp = document.getElementById('apiKey');
-  if (inp) inp.value = state.apiKey;
-  handleApiKey(state.apiKey);
-}
-updateFilterToggle();
-updateCatalogBadge();
-renderAll();
+// Auth check — altijd eerste
+checkAuth().then(() => {
+  if (state.apiKey) {
+    const inp = document.getElementById('apiKey');
+    if (inp) inp.value = state.apiKey;
+    handleApiKey(state.apiKey);
+  }
+  setPlatform(currentPlatform);
+  updateFilterToggle();
+  updateCatalogBadge();
+  renderAll();
+});
 </script>
 </body>
 </html>
