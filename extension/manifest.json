@@ -1,0 +1,45 @@
+{
+  "manifest_version": 3,
+  "name": "VENTR Connect",
+  "version": "1.0.0",
+  "description": "Automatisch Vinted-advertenties plaatsen vanuit VENTR",
+  "permissions": ["storage", "unlimitedStorage", "activeTab", "scripting"],
+  "host_permissions": [
+    "https://ventr.nl/*",
+    "https://www.vinted.nl/*",
+    "https://www.vinted.be/*",
+    "https://www.vinted.fr/*",
+    "https://www.vinted.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://ventr.nl/*"],
+      "js": ["content-ventr.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://www.vinted.nl/*",
+        "https://www.vinted.be/*",
+        "https://www.vinted.fr/*",
+        "https://www.vinted.com/*"
+      ],
+      "js": ["content-vinted.js"],
+      "css": ["panel.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "VENTR Connect",
+    "default_icon": {
+      "48": "icons/icon48.png"
+    }
+  },
+  "icons": {
+    "48": "icons/icon48.png"
+  }
+}

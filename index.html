@@ -1550,6 +1550,55 @@ function copyListing(groupId) {
   copyText(`${l.titel}\n\n${l.beschrijving}\n\nStaat: ${l.staat}\nMaat: ${l.maat}\nCategorie: ${l.categorie}\nPrijs: €${l.prijs}`);
 }
 
+// ── EXTENSIE COMMUNICATIE ──────────────────────────────────────────────────
+
+const state_ext = { ready: false };
+
+window.addEventListener('message', e => {
+  if (e.data?.type === 'VENTR_EXTENSION_READY') {
+    state_ext.ready = true;
+    showToast('✅ VENTR Connect extensie actief');
+  }
+  if (e.data?.type === 'VENTR_ADD_TO_QUEUE_RESPONSE') {
+    const count = e.data.count || 0;
+    showToast(`✅ In wachtrij gezet · ${count} totaal`);
+  }
+});
+
+function addToQueue(groupId) {
+  const g = state.groups.find(g => g.id === groupId);
+  if (!g?.listing) return;
+
+  if (!state_ext.ready) {
+    showToast('⚠️ VENTR Connect extensie niet gevonden — installeer hem eerst');
+    return;
+  }
+
+  const photos = g.photoIndices
+    .map(i => state.photos[i])
+    .filter(Boolean)
+    .map(p => ({ preview: p.preview }));
+
+  window.postMessage({
+    type: 'VENTR_ADD_TO_QUEUE',
+    item: {
+      id: g.id,
+      listing: g.listing,
+      photos,
+    }
+  }, '*');
+}
+
+function addAllToQueue() {
+  if (!state_ext.ready) {
+    showToast('⚠️ VENTR Connect extensie niet gevonden');
+    return;
+  }
+  const done = state.groups.filter(g => g.status === 'done');
+  done.forEach(g => addToQueue(g.id));
+  showToast(`📥 ${done.length} advertenties naar wachtrij`);
+}
+
 function downloadPhotos(groupId) {
   const g = state.groups.find(g => g.id === groupId);
   if (!g) return;
@@ -1789,8 +1838,9 @@ function renderResults() {
             </div>
           </div>
           <div class="lc-actions">
-            <button class="copy-btn" onclick="downloadPhotos('${g.id}')">📥 Download foto's</button>
-            <button class="copy-btn" onclick="copyListing('${g.id}')">📋 Kopieer tekst</button>
+            <button class="copy-btn" onclick="addToQueue('${g.id}')" style="background:linear-gradient(135deg,#7D3C52,#C9956C);color:white;border-color:transparent">📥 Wachtrij</button>
+            <button class="copy-btn" onclick="downloadPhotos('${g.id}')">⬇ Foto's</button>
+            <button class="copy-btn" onclick="copyListing('${g.id}')">📋 Tekst</button>
           </div>
         </div>
         <div class="lc-body">
@@ -1853,8 +1903,9 @@ function renderResults() {
         </div>
         <div style="display:flex;align-items:center;gap:12px">
           ${done.length > 0 ? `<span class="results-total">€${total} totaal</span>` : ''}
+          ${done.length > 0 ? `<button class="export-btn" onclick="addAllToQueue()" style="background:linear-gradient(135deg,#7D3C52,#C9956C)">📥 Alles in wachtrij (${done.length})</button>` : ''}
           ${done.length > 0 ? `<button class="export-btn" onclick="exportCSV()" style="background:var(--rose-deep)">📊 CSV</button>` : ''}
-          ${done.length > 0 ? `<button class="export-btn" onclick="exportAll()">📋 Kopieer alle (${done.length})</button>` : ''}
+          ${done.length > 0 ? `<button class="export-btn" onclick="exportAll()">📋 Kopieer alle</button>` : ''}
         </div>
       </div>
       ${cards}

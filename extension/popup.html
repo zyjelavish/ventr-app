@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  width: 280px;
+  font-family: 'DM Sans', -apple-system, sans-serif;
+  font-size: 13px;
+  color: #2C1A14;
+  background: #FDF8F2;
+}
+.header {
+  background: linear-gradient(135deg, #7D3C52, #C9956C);
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.logo {
+  color: white;
+  font-weight: 600;
+  letter-spacing: 3px;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.dot { width:7px; height:7px; border-radius:50%; background:#EDD98A; }
+.subtitle { color: rgba(255,255,255,0.75); font-size: 10px; letter-spacing: 1px; margin-left: auto; }
+
+.body { padding: 14px; }
+
+.stat-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.stat {
+  flex: 1;
+  background: white;
+  border: 1px solid #E8C4A0;
+  border-radius: 8px;
+  padding: 10px;
+  text-align: center;
+}
+.stat-num {
+  font-size: 24px;
+  font-weight: 300;
+  color: #7D3C52;
+  font-family: 'Georgia', serif;
+  line-height: 1;
+}
+.stat-label {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #8A7570;
+  margin-top: 2px;
+}
+
+.queue-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+
+.queue-item {
+  background: white;
+  border: 1px solid #D4C8C0;
+  border-radius: 8px;
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.queue-item.done { opacity: 0.5; }
+.qi-thumb { width: 36px; height: 36px; object-fit: cover; border-radius: 4px; flex-shrink: 0; }
+.qi-info { flex: 1; min-width: 0; }
+.qi-title { font-size: 11px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qi-price { font-size: 10px; color: #C9956C; font-weight: 600; }
+.qi-status { font-size: 10px; }
+.status-pending { color: #8A7570; }
+.status-done { color: #3A8A3A; }
+
+.btn {
+  width: 100%;
+  padding: 9px;
+  border-radius: 8px;
+  border: none;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+}
+.btn-primary { background: linear-gradient(135deg, #7D3C52, #C9956C); color: white; }
+.btn-secondary { background: #F5EBE0; color: #7D3C52; border: 1px solid #E8C4A0; }
+
+.empty { text-align: center; color: #8A7570; padding: 20px; font-size: 12px; line-height: 1.7; }
+.empty a { color: #C9956C; }
+
+.footer { padding: 0 14px 14px; }
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="logo"><span class="dot"></span>VENTR</div>
+  <span class="subtitle">CONNECT</span>
+</div>
+<div class="body">
+  <div class="stat-row">
+    <div class="stat">
+      <div class="stat-num" id="statPending">0</div>
+      <div class="stat-label">In wachtrij</div>
+    </div>
+    <div class="stat">
+      <div class="stat-num" id="statDone">0</div>
+      <div class="stat-label">Geplaatst</div>
+    </div>
+  </div>
+  <div id="queueList" class="queue-list"></div>
+  <div id="emptyMsg" class="empty" style="display:none">
+    Geen advertenties in wachtrij.<br>
+    Ga naar <a href="https://ventr.nl" target="_blank">ventr.nl</a> om te beginnen 🌸
+  </div>
+</div>
+<div class="footer">
+  <button class="btn btn-primary" id="btnVinted">Ga naar Vinted → Verkopen</button>
+  <button class="btn btn-secondary" id="btnClearDone">Verwijder geplaatste items</button>
+</div>
+<script src="popup.js"></script>
+</body>
+</html>
