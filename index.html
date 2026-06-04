@@ -1235,9 +1235,6 @@ function readFile(file) {
     abr.onerror = rej;
     abr.readAsArrayBuffer(file);
   });
-    r.onerror = rej;
-    r.readAsDataURL(file);
-  });
 }
 
 function resizeImage(base64, mediaType, maxPx, quality) {
