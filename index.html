@@ -907,36 +907,131 @@ input[type=file] { display:none; }
   margin-bottom: 0;
 }
 
-/* ── DRAG & DROP ── */
-.photo-drag-wrap {
+/* ── GROEPERING UI ── */
+.group-photos-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px;
+  min-height: 80px;
+  background: var(--off-white);
+  border-radius: 0 0 10px 10px;
   position: relative;
-  flex: 1;
-  min-width: 0;
-  cursor: grab;
-  transition: opacity 0.15s;
 }
-.photo-drag-wrap:active { cursor: grabbing; }
-.photo-drag-wrap img { width:100%; height:100%; object-fit:cover; display:block; pointer-events:none; }
-.photo-drag-wrap.dragging { opacity: 0.3; }
 
-.drag-hint {
+.group-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--sand);
+  background: linear-gradient(135deg, var(--rg-pale), var(--champagne));
+}
+
+.photo-tile {
+  position: relative;
+  width: 80px;
+  border-radius: 7px;
+  overflow: visible;
+  border: 2px solid transparent;
+  transition: border-color 0.15s, transform 0.15s;
+  background: white;
+}
+
+.photo-tile.photo-selected {
+  border-color: var(--rose);
+  box-shadow: 0 0 0 3px rgba(181,96,122,0.18);
+}
+
+.photo-tile-img {
+  width: 80px;
+  height: 80px;
+  border-radius: 6px;
+  overflow: hidden;
+  cursor: grab;
+  position: relative;
+  background: var(--sand);
+  user-select: none;
+}
+
+.photo-tile-img:active { cursor: grabbing; }
+
+.photo-tile-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  pointer-events: none;
+  transform-origin: center;
+}
+
+.photo-tile-handle {
   position: absolute;
-  top: 4px; right: 4px;
-  font-size: 14px;
+  top: 3px; right: 3px;
   color: white;
-  text-shadow: 0 1px 3px rgba(0,0,0,0.6);
+  font-size: 13px;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.7);
   opacity: 0;
   transition: opacity 0.15s;
   pointer-events: none;
   line-height: 1;
 }
-.photo-drag-wrap:hover .drag-hint { opacity: 1; }
+
+.photo-tile-img:hover .photo-tile-handle { opacity: 1; }
+
+.photo-tile-actions {
+  display: flex;
+  justify-content: center;
+  gap: 2px;
+  padding: 3px 0;
+}
+
+.pt-btn {
+  background: var(--champagne);
+  border: 1px solid var(--silver);
+  border-radius: 4px;
+  width: 24px;
+  height: 20px;
+  font-size: 11px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+  color: var(--warm-gray);
+  padding: 0;
+}
+
+.pt-btn:hover { background: var(--rg-pale); border-color: var(--rg); color: var(--rose-deep); }
+.pt-sel-on { background: var(--rose) !important; color: white !important; border-color: var(--rose) !important; }
+
+.group-drop-hint {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: var(--mid-gray);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.group-card:empty .group-drop-hint,
+.group-photos-strip:has(.photo-tile:only-child) .group-drop-hint { opacity: 0; }
 
 .group-card.drop-over {
-  border-color: var(--rose);
-  box-shadow: 0 0 0 3px rgba(181,96,122,0.2);
-  transform: scale(1.02);
-  transition: all 0.15s;
+  border-color: var(--rose) !important;
+  box-shadow: 0 0 0 3px rgba(181,96,122,0.2), inset 0 0 0 2px rgba(181,96,122,0.1);
+  transform: scale(1.015);
+  transition: all 0.12s;
+}
+
+.group-new-zone.drop-over {
+  opacity: 1 !important;
+  border-color: var(--rg) !important;
+  background: var(--rg-pale);
 }
 
 /* Scrollbar */
@@ -1777,136 +1872,257 @@ function renderUploadedState() {
     </div>`;
 }
 
-// ── DRAG & DROP GROEPERING ─────────────────────────────────────────────────
+// ── GROEPERING: POINTER EVENTS + SELECTIE SYSTEEM ─────────────────────────
 
-let drag = null; // { photoIdx, fromGroupId }
+const pd = { active:false, photoIdx:null, fromGroupId:null, clone:null, ox:0, oy:0 };
+const sel = new Set(); // geselecteerde foto-indices
 
-function onPhotoDragStart(e, groupId, photoIdx) {
-  drag = { photoIdx, fromGroupId: groupId };
-  e.dataTransfer.effectAllowed = 'move';
-  e.currentTarget.classList.add('dragging');
-}
+// ── POINTER DRAG ───────────────────────────────────────────────────────────
 
-function onPhotoDragEnd(e) {
-  e.currentTarget.classList.remove('dragging');
-  document.querySelectorAll('.group-card').forEach(c => c.classList.remove('drop-over'));
-  drag = null;
-}
-
-function onGroupDragOver(e, groupId) {
-  if (!drag || drag.fromGroupId === groupId) return;
+function startDrag(e, groupId, photoIdx) {
+  if (e.button !== undefined && e.button !== 0) return;
   e.preventDefault();
-  e.dataTransfer.dropEffect = 'move';
-  document.querySelectorAll('.group-card').forEach(c => c.classList.remove('drop-over'));
-  document.getElementById('gc_' + groupId)?.classList.add('drop-over');
-}
+  pd.active = true; pd.photoIdx = photoIdx; pd.fromGroupId = groupId;
 
-function onGroupDragLeave(e, groupId) {
-  // Alleen verwijderen als echt buiten de kaart
-  if (!e.currentTarget.contains(e.relatedTarget)) {
-    document.getElementById('gc_' + groupId)?.classList.remove('drop-over');
+  const wrap = e.currentTarget;
+  const rect = wrap.getBoundingClientRect();
+  const img = wrap.querySelector('img');
+
+  pd.clone = document.createElement('div');
+  pd.clone.style.cssText = `position:fixed;width:${rect.width}px;height:${rect.height}px;
+    border-radius:8px;overflow:hidden;pointer-events:none;z-index:99999;
+    opacity:0.88;box-shadow:0 12px 32px rgba(0,0,0,0.35);
+    transform:rotate(2deg) scale(1.06);transition:transform 0.1s;`;
+  if (img) {
+    const ci = img.cloneNode();
+    ci.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
+    pd.clone.appendChild(ci);
   }
+  document.body.appendChild(pd.clone);
+
+  const cx = e.touches ? e.touches[0].clientX : e.clientX;
+  const cy = e.touches ? e.touches[0].clientY : e.clientY;
+  pd.ox = cx - rect.left; pd.oy = cy - rect.top;
+  moveClone(cx, cy);
+
+  wrap.style.opacity = '0.3';
+  wrap.dataset.dragging = '1';
+
+  document.addEventListener('pointermove', onPMove);
+  document.addEventListener('pointerup', onPUp);
+  document.addEventListener('touchmove', onPMove, { passive:false });
+  document.addEventListener('touchend', onPUp);
 }
 
-function onGroupDrop(e, targetGroupId) {
+function moveClone(x, y) {
+  if (!pd.clone) return;
+  pd.clone.style.left = (x - pd.ox) + 'px';
+  pd.clone.style.top  = (y - pd.oy) + 'px';
+}
+
+function onPMove(e) {
+  if (!pd.active) return;
   e.preventDefault();
+  const x = e.touches ? e.touches[0].clientX : e.clientX;
+  const y = e.touches ? e.touches[0].clientY : e.clientY;
+  moveClone(x, y);
+
+  // Highlight drop target
+  pd.clone.style.visibility = 'hidden';
+  const under = document.elementFromPoint(x, y);
+  pd.clone.style.visibility = '';
   document.querySelectorAll('.group-card').forEach(c => c.classList.remove('drop-over'));
-  if (!drag || drag.fromGroupId === targetGroupId) { drag = null; return; }
+  const card = under?.closest?.('.group-card');
+  if (card && card.dataset.gid !== pd.fromGroupId) card.classList.add('drop-over');
+}
 
-  const { photoIdx, fromGroupId } = drag;
-  drag = null;
+function onPUp(e) {
+  if (!pd.active) return;
+  pd.clone?.remove(); pd.clone = null;
+  document.querySelectorAll('[data-dragging]').forEach(el => { el.style.opacity=''; delete el.dataset.dragging; });
+  document.querySelectorAll('.group-card').forEach(c => c.classList.remove('drop-over'));
 
-  const from = state.groups.find(g => g.id === fromGroupId);
-  const to   = state.groups.find(g => g.id === targetGroupId);
+  const x = e.changedTouches ? e.changedTouches[0].clientX : e.clientX;
+  const y = e.changedTouches ? e.changedTouches[0].clientY : e.clientY;
+
+  const under = document.elementFromPoint(x, y);
+  const card = under?.closest?.('.group-card');
+  const targetGid = card?.dataset?.gid;
+
+  if (targetGid && targetGid !== pd.fromGroupId) {
+    movePhotoToGroup(pd.photoIdx, pd.fromGroupId, targetGid);
+  } else if (!card) {
+    splitToNewGroup(pd.photoIdx, pd.fromGroupId);
+  }
+
+  pd.active = false; pd.photoIdx = null; pd.fromGroupId = null;
+  document.removeEventListener('pointermove', onPMove);
+  document.removeEventListener('pointerup', onPUp);
+  document.removeEventListener('touchmove', onPMove);
+  document.removeEventListener('touchend', onPUp);
+}
+
+function movePhotoToGroup(photoIdx, fromId, toId) {
+  const from = state.groups.find(g => g.id === fromId);
+  const to   = state.groups.find(g => g.id === toId);
   if (!from || !to) return;
-
   from.photoIndices = from.photoIndices.filter(i => i !== photoIdx);
   from.status = 'idle'; from.listing = null;
   to.photoIndices = [...to.photoIndices, photoIdx];
   to.status = 'idle'; to.listing = null;
-
-  // Lege groepen verwijderen
   state.groups = state.groups.filter(g => g.photoIndices.length > 0);
-  renderMain();
+  sel.clear(); renderMain();
 }
 
-// Sleep naar lege ruimte = nieuwe groep
-function onGridDragOver(e) {
-  if (!drag) return;
-  e.preventDefault();
-  e.dataTransfer.dropEffect = 'copy';
-}
-
-function onGridDrop(e) {
-  if (!drag) return;
-  e.preventDefault();
-  // Kijk of we op een kaart droppen (dan afhandelen via onGroupDrop)
-  if (e.target.closest('.group-card')) return;
-
-  const { photoIdx, fromGroupId } = drag;
-  drag = null;
-
-  const from = state.groups.find(g => g.id === fromGroupId);
+function splitToNewGroup(photoIdx, fromId) {
+  const from = state.groups.find(g => g.id === fromId);
   if (!from || from.photoIndices.length <= 1) return;
-
   from.photoIndices = from.photoIndices.filter(i => i !== photoIdx);
   from.status = 'idle'; from.listing = null;
-  state.groups.push({ id: uid(), photoIndices: [photoIdx], status: 'idle', listing: null });
+  state.groups.push({ id: uid(), photoIndices:[photoIdx], status:'idle', listing:null });
   state.groups = state.groups.filter(g => g.photoIndices.length > 0);
-  renderMain();
+  sel.clear(); renderMain();
 }
 
+// ── SELECTIE SYSTEEM ───────────────────────────────────────────────────────
+
+function toggleSelect(photoIdx) {
+  if (sel.has(photoIdx)) sel.delete(photoIdx);
+  else sel.add(photoIdx);
+  updateSelectionBar();
+  document.querySelectorAll(`[data-pi="${photoIdx}"]`).forEach(el => {
+    el.classList.toggle('photo-selected', sel.has(photoIdx));
+  });
+}
+
+function updateSelectionBar() {
+  const bar = document.getElementById('sel-bar');
+  if (!bar) return;
+  bar.style.display = sel.size >= 2 ? 'flex' : 'none';
+  const btn = document.getElementById('sel-group-btn');
+  if (btn) btn.textContent = `✓ Groepeer ${sel.size} geselecteerde foto's`;
+}
+
+function groupSelected() {
+  if (sel.size < 2) return;
+  const indices = [...sel];
+  state.groups.forEach(g => {
+    g.photoIndices = g.photoIndices.filter(i => !indices.includes(i));
+    if (g.photoIndices.length > 0) { g.status='idle'; g.listing=null; }
+  });
+  state.groups = state.groups.filter(g => g.photoIndices.length > 0);
+  state.groups.push({ id:uid(), photoIndices:indices, status:'idle', listing:null });
+  sel.clear(); renderMain();
+}
+
+function selectAllInGroup(groupId) {
+  const g = state.groups.find(g => g.id === groupId);
+  if (!g) return;
+  g.photoIndices.forEach(i => sel.add(i));
+  updateSelectionBar();
+  document.querySelectorAll('[data-pi]').forEach(el => {
+    el.classList.toggle('photo-selected', sel.has(+el.dataset.pi));
+  });
+}
+
+function clearSelection() { sel.clear(); updateSelectionBar(); renderMain(); }
+
+// ── ROTATIE ────────────────────────────────────────────────────────────────
+
+function rotatePhoto(photoIdx, dir) {
+  const p = state.photos[photoIdx];
+  if (!p) return;
+  p.rotation = (((p.rotation || 0) + (dir === 'cw' ? 90 : -90)) + 360) % 360;
+  document.querySelectorAll(`[data-pi="${photoIdx}"] img`).forEach(img => {
+    img.style.transform = `rotate(${p.rotation}deg)`;
+    img.style.transition = 'transform 0.25s ease';
+  });
+}
+
+// ── BULK ACTIES ────────────────────────────────────────────────────────────
+
+function splitAllGroups() {
+  state.groups = state.photos.map((_, i) => ({ id:uid(), photoIndices:[i], status:'idle', listing:null }));
+  sel.clear(); renderMain();
+}
+
+function mergeAllGroups() {
+  const all = state.groups.flatMap(g => g.photoIndices);
+  state.groups = [{ id:uid(), photoIndices:all, status:'idle', listing:null }];
+  sel.clear(); renderMain();
+}
+
+// ── RENDER ─────────────────────────────────────────────────────────────────
+
 function renderGroupReview() {
-  const cards = state.groups.map((g, gi) => `
-    <div class="group-card fade-in"
-         id="gc_${g.id}"
-         ondragover="onGroupDragOver(event,'${g.id}')"
-         ondragleave="onGroupDragLeave(event,'${g.id}')"
-         ondrop="onGroupDrop(event,'${g.id}')">
-      <div class="group-photos">
-        ${g.photoIndices.map(idx => {
-          const p = state.photos[idx];
-          return `
-            <div class="photo-drag-wrap"
-                 draggable="true"
-                 ondragstart="onPhotoDragStart(event,'${g.id}',${idx})"
-                 ondragend="onPhotoDragEnd(event)">
-              ${p ? `<img src="${p.preview}" alt="" draggable="false">` : ''}
-              <div class="drag-hint">⠿</div>
-            </div>`;
-        }).join('')}
+  const photoCard = (groupId, idx) => {
+    const p = state.photos[idx];
+    const rot = p?.rotation || 0;
+    const isSel = sel.has(idx);
+    return `
+      <div class="photo-tile ${isSel ? 'photo-selected' : ''}" data-pi="${idx}">
+        <div class="photo-tile-img"
+             onpointerdown="startDrag(event,'${groupId}',${idx})">
+          ${p ? `<img src="${p.preview}" alt="" draggable="false" style="transform:rotate(${rot}deg)">` : ''}
+          <div class="photo-tile-handle">⠿</div>
+        </div>
+        <div class="photo-tile-actions">
+          <button class="pt-btn" onclick="rotatePhoto(${idx},'ccw')" title="Draaien links">↺</button>
+          <button class="pt-btn pt-sel ${isSel?'pt-sel-on':''}" onclick="toggleSelect(${idx})" title="Selecteren">
+            ${isSel ? '✓' : '○'}
+          </button>
+          <button class="pt-btn" onclick="rotatePhoto(${idx},'cw')" title="Draaien rechts">↻</button>
+        </div>
+      </div>`;
+  };
+
+  const groupCard = (g, gi) => `
+    <div class="group-card fade-in" id="gc_${g.id}" data-gid="${g.id}">
+      <div class="group-label">
+        <span class="group-num">Artikel ${gi+1}</span>
+        <span class="group-count">${g.photoIndices.length} foto${g.photoIndices.length!==1?"'s":""}</span>
+        <button class="pt-btn" onclick="selectAllInGroup('${g.id}')" title="Selecteer alle foto's van dit artikel" style="font-size:9px;padding:2px 6px">Selecteer alle</button>
       </div>
-      <div class="group-info">
-        <div class="group-num">Artikel ${gi + 1}</div>
-        <div class="group-count">${g.photoIndices.length} foto${g.photoIndices.length !== 1 ? "'s" : ""} · sleep om te hergroeperen</div>
+      <div class="group-photos-strip">
+        ${g.photoIndices.map(idx => photoCard(g.id, idx)).join('')}
+        <div class="group-drop-hint">Sleep foto's hier naartoe</div>
       </div>
-    </div>`
-  ).join('');
+    </div>`;
 
   return `
     <div class="group-review fade-in">
       <div class="gr-header">
         <div>
-          <div class="gr-title">🔍 ${state.groups.length} artikelen gedetecteerd</div>
+          <div class="gr-title">🔍 ${state.groups.length} artikel${state.groups.length!==1?"en":""} gedetecteerd</div>
           <div class="gr-sub">
-            Sleep foto's tussen artikelen om te hergroeperen.
-            Sleep naar lege ruimte om een nieuw artikel aan te maken.
+            <b>Sleep</b> foto's naar een ander artikel · <b>Klik ○</b> om te selecteren en samen te voegen · <b>↺↻</b> om te draaien
           </div>
         </div>
         <div class="gr-actions">
-          <button class="btn-sm btn-confirm" onclick="generateAll()">✨ Ziet er goed uit — genereer</button>
+          <button class="btn-sm" onclick="splitAllGroups()" style="background:var(--rg-pale);color:var(--rose-deep);border:1px solid var(--rg-light)">✂ Alles splitsen</button>
+          <button class="btn-sm" onclick="mergeAllGroups()" style="background:var(--rg-pale);color:var(--rose-deep);border:1px solid var(--rg-light)">⊞ Alles samenvoegen</button>
+          <button class="btn-sm btn-confirm" onclick="generateAll()">✨ Genereer advertenties</button>
         </div>
       </div>
-      <div class="group-grid"
-           ondragover="onGridDragOver(event)"
-           ondrop="onGridDrop(event)">
-        ${cards}
-        <div class="group-card group-card-new" id="gc_new"
-             ondragover="onGroupDragOver(event,'__new__')"
-             ondrop="onGridDrop(event)"
-             style="border-style:dashed;opacity:0.5;display:flex;align-items:center;justify-content:center;min-height:120px;cursor:default">
-          <div style="text-align:center;color:var(--warm-gray);font-size:12px;">
-            ＋<br>Sleep hier voor<br>nieuw artikel
+
+      <!-- Selectie actie balk -->
+      <div id="sel-bar" style="display:none;align-items:center;gap:10px;background:var(--blush);border:1px solid var(--blush-deep);border-radius:8px;padding:10px 16px;margin-bottom:16px">
+        <button id="sel-group-btn" class="btn-sm btn-confirm" onclick="groupSelected()"></button>
+        <button class="btn-sm" onclick="clearSelection()" style="background:transparent;color:var(--warm-gray);border:1px solid var(--silver)">✕ Deselecteer</button>
+      </div>
+
+      <!-- Artikelgroepen -->
+      <div class="group-grid">
+        ${state.groups.map((g, gi) => groupCard(g, gi)).join('')}
+        <!-- Drop zone voor nieuw artikel -->
+        <div class="group-card group-new-zone" data-gid="__new__"
+             style="border-style:dashed;min-height:140px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;opacity:0.55;cursor:default">
+          <div style="font-size:22px">＋</div>
+          <div style="font-size:11px;color:var(--warm-gray);text-align:center">Sleep hier voor<br>nieuw artikel</div>
+        </div>
+      </div>
+    </div>`;
+}
           </div>
         </div>
       </div>
