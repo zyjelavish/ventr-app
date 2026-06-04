@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="nl">
+<html lang="nl" class="locked">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -11,25 +11,16 @@ html { scroll-behavior:smooth; }
 
 /* ── ACHTERGROND ROTATIE ── */
 .bg-layer {
-  position: fixed; inset: 0; z-index: 0;
+  position: fixed; inset: 0; z-index: 1;
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
   opacity: 0;
-  transition: opacity 2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: opacity 2.2s cubic-bezier(0.4, 0, 0.2, 1);
   pointer-events: none;
+  /* Geen blur — beelden scherp en ongefiltered */
 }
 .bg-layer.active { opacity: 1; }
-.bg-layer::after {
-  content: '';
-  position: absolute; inset: 0;
-  background: linear-gradient(
-    135deg,
-    rgba(253,248,242,0.18) 0%,
-    rgba(201,149,108,0.06) 50%,
-    rgba(125,60,82,0.10) 100%
-  );
-}
 
 :root {
   --rg:        #C9956C;
@@ -934,9 +925,17 @@ input[type=file] { display:none; }
   position: relative; z-index: 10;
 }
 
-/* Zorg dat alles boven achtergrond staat */
-header, .app, #loginOverlay { position: relative; z-index: 10; }
-.main { background: rgba(250,248,245,0.55); backdrop-filter: blur(2px); }
+/* Z-index structuur */
+header, .gold-accent, .app { position: relative; z-index: 10; }
+.main { background: rgba(250,248,245,0.55); }
+
+/* App verborgen zolang niet ingelogd */
+body.locked header,
+body.locked .gold-accent,
+body.locked .app,
+html.locked header,
+html.locked .gold-accent,
+html.locked .app { display: none !important; }
 
 /* ── GROEPERING UI ── */
 .group-photos-strip {
@@ -1067,9 +1066,9 @@ header, .app, #loginOverlay { position: relative; z-index: 10; }
 
 /* ── LOGIN OVERLAY ── */
 #loginOverlay {
-  position: fixed; inset: 0; z-index: 99999;
+  position: fixed; inset: 0; z-index: 50;
   display: flex; align-items: center; justify-content: center;
-  background: transparent;
+  background: transparent; /* bg-layers zijn zichtbaar hierachter */
 }
 
 .login-card {
@@ -1451,11 +1450,15 @@ function doLogout() {
 }
 
 function showLoginOverlay() {
+  document.body.classList.add('locked');
+  document.documentElement.classList.add('locked');
   const o = document.getElementById('loginOverlay');
   if (o) o.style.display = 'flex';
 }
 
 function hideLoginOverlay() {
+  document.body.classList.remove('locked');
+  document.documentElement.classList.remove('locked');
   const o = document.getElementById('loginOverlay');
   if (o) o.style.display = 'none';
 }
