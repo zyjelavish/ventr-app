@@ -2224,6 +2224,19 @@ async function catDelete(id) {
   });
 }
 
+async function catSendToQueueById(id) {
+  // Haal item op uit IndexedDB (niet als HTML-attribuut doorgeven — te groot)
+  const db = await openCatDB();
+  const item = await new Promise((res, rej) => {
+    const tx = db.transaction(CAT_STORE, 'readonly');
+    const req = tx.objectStore(CAT_STORE).get(id);
+    req.onsuccess = () => res(req.result);
+    req.onerror   = e => rej(e.target.error);
+  });
+  if (!item) { showToast('❌ Item niet gevonden in catalogus'); return; }
+  await catSendToQueue(item);
+}
+
 async function catSendToQueue(item) {
   if (!state_ext.ready) {
     showToast('⚠️ Extensie niet gevonden — herlaad de pagina (F5)');
@@ -2624,11 +2637,11 @@ async function renderCatalog() {
             </div>
           </div>
           <div class="lc-actions" style="flex-wrap:wrap;gap:5px">
-            ${item.status !== 'sold' ? `<button class="copy-btn" onclick="catSendToQueue(${JSON.stringify(item).replace(/"/g,'&quot;')})" style="background:linear-gradient(135deg,#7D3C52,#C9956C);color:white;border:none">📥 Wachtrij</button>` : ''}
+            ${item.status !== 'sold' ? `<button class="copy-btn" onclick="catSendToQueueById('${item.id}')" style="background:linear-gradient(135deg,#7D3C52,#C9956C);color:white;border:none">📥 Wachtrij</button>` : ''}
             ${item.status === 'listed' ? `<button class="copy-btn" onclick="catMarkSold('${item.id}')">✅ Verkocht</button>` : ''}
             ${item.status === 'queued' ? `<button class="copy-btn" onclick="catMarkListed('${item.id}')">🏷️ Geplaatst</button>` : ''}
             ${item.status === 'saved'  ? `<button class="copy-btn" onclick="catMarkListed('${item.id}')">🏷️ Geplaatst</button>` : ''}
-            <button class="copy-btn" onclick="copyListing_cat('${item.id}', ${JSON.stringify(item.listing).replace(/"/g,'&quot;')})">📋 Tekst</button>
+            <button class="copy-btn" onclick="copyListingCatById('${item.id}')">📋 Tekst</button>
             <button class="copy-btn" onclick="if(confirm('Verwijderen?'))catDelete('${item.id}').then(()=>renderCatalog())" style="color:#C04040">🗑️</button>
           </div>
         </div>
@@ -2671,6 +2684,17 @@ async function renderCatalog() {
 
 function copyListing_cat(id, listing) {
   copyText(`${listing.titel}\n\n${listing.beschrijving}\n\nStaat: ${listing.staat}\nMaat: ${listing.maat}\nCategorie: ${listing.categorie}\nPrijs: €${listing.prijs}`);
+}
+
+async function copyListingCatById(id) {
+  const db = await openCatDB();
+  const item = await new Promise(res => {
+    const tx = db.transaction(CAT_STORE, 'readonly');
+    const req = tx.objectStore(CAT_STORE).get(id);
+    req.onsuccess = () => res(req.result);
+    req.onerror   = () => res(null);
+  });
+  if (item?.listing) copyListing_cat(id, item.listing);
 }
 
 async function catSendAllToQueue() {
