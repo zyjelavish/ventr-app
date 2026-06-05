@@ -1987,6 +1987,7 @@ Antwoord UITSLUITEND als JSON:
   }
 
   state.phase = 'grouped';
+  state.groupingProgress = ''; // Progress wissen na voltooiing
   renderAll();
 }
 
@@ -2892,7 +2893,7 @@ function mergeAllGroups() {
 // ── RENDER ─────────────────────────────────────────────────────────────────
 
 function renderGroupReview() {
-  const photoCard = (groupId, idx) => {
+  const photoCard = (groupId, idx, groupSize) => {
     const p = state.photos[idx];
     const rot = p?.rotation || 0;
     const isSel = sel.has(idx);
@@ -2909,7 +2910,7 @@ function renderGroupReview() {
             ${isSel ? '✓' : '○'}
           </button>
           <button class="pt-btn" onclick="rotatePhoto(${idx},'cw')" title="Draaien rechts">↻</button>
-          ${g.photoIndices.length > 1 ? `<button class="pt-btn" onclick="splitToNewGroup(${idx},'${groupId}')" title="Maak apart artikel" style="color:#C04040;font-size:13px">✂</button>` : ''}
+          ${groupSize > 1 ? `<button class="pt-btn" onclick="splitToNewGroup(${idx},'${groupId}')" title="Maak apart artikel" style="color:#C04040;font-size:13px">✂</button>` : ''}
         </div>
       </div>`;
   };
@@ -2922,7 +2923,7 @@ function renderGroupReview() {
         <button class="pt-btn" onclick="selectAllInGroup('${g.id}')" title="Selecteer alle foto's van dit artikel" style="font-size:9px;padding:2px 6px">Selecteer alle</button>
       </div>
       <div class="group-photos-strip">
-        ${g.photoIndices.map(idx => photoCard(g.id, idx)).join('')}
+        ${g.photoIndices.map(idx => photoCard(g.id, idx, g.photoIndices.length)).join('')}
         <div class="group-drop-hint">Sleep foto's hier naartoe</div>
       </div>
     </div>`;
