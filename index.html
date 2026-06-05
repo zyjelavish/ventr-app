@@ -1261,10 +1261,7 @@ body.platform-markt { --rg: #2E86C1; --rg-light: #AED6F1; --rg-pale: #EBF5FB; --
       </button>
     </div>
 
-    <!-- Catalogus knop (verborgen, badge zit hierboven) -->
-    <button onclick="showCatalog()" style="display:none" style="margin:0 20px 10px;width:calc(100% - 40px);padding:8px 16px;border-radius:8px;background:var(--champagne);border:1px solid var(--rg-light);font-family:'DM Sans',sans-serif;font-size:11px;font-weight:500;letter-spacing:1px;text-transform:uppercase;color:var(--rose-deep);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:all 0.2s">
-      📚 Catalogus <span id="catBadge" style="background:var(--rg);color:white;border-radius:20px;padding:1px 7px;font-size:9px;font-weight:700"></span>
-    </button>
+    <!-- Duplicate catalogus knop verwijderd (bug #1) -->
 
     <!-- Drop zone -->
     <div class="drop-zone" id="dropZone"
@@ -1425,7 +1422,7 @@ async function checkAuth() {
     const d = await r.json();
     if (d.ok) hideLoginOverlay();
     else showLoginOverlay();
-  } catch { hideLoginOverlay(); }
+  } catch { showLoginOverlay(); } // Bug #2 fix: netwerkfout = login tonen, niet verbergen
 }
 
 async function doLogin() {
@@ -2047,7 +2044,7 @@ async function generateAll() {
 
     try {
       const gPhotos = group.photoIndices.map(i => state.photos[i]).filter(Boolean);
-      // Resize naar max 1100px voor generatie — kwaliteit behouden, payload beheersbaar
+      if (!gPhotos.length) { group.status = 'error'; group.error = 'Geen foto\'s beschikbaar'; continue; } // Bug #7
       const resized = await Promise.all(gPhotos.map(p => resizeForGeneration(p.base64, p.mediaType)));
       const content = [
         ...resized.map(r => ({ type: 'image', source: { type: 'base64', media_type: r.mediaType, data: r.base64 } })),
@@ -2427,10 +2424,11 @@ async function crosslistTo(groupId, platform) {
 
   const platformName = { marktplaats: 'Marktplaats 🏠', facebook: 'Facebook 📘' }[platform];
 
-  // Stuur naar wachtrij én open het platform
+  // Bug #4 fix: gebruik VENTR_CROSSLIST zodat background.js VENTR_FILL_LISTING stuurt
+  // Stuur eerst naar wachtrij, dan crosslist (opent tab + auto-fill)
   window.postMessage({ type: 'VENTR_ADD_TO_QUEUE', item }, '*');
-  await new Promise(r => setTimeout(r, 300));
-  window.postMessage({ type: `VENTR_OPEN_${platform.toUpperCase()}` }, '*');
+  await new Promise(r => setTimeout(r, 400));
+  window.postMessage({ type: 'VENTR_CROSSLIST', item, platform }, '*');
   showToast(`🚀 Opening ${platformName} — VENTR vult automatisch in`);
 }
 
@@ -2920,10 +2918,22 @@ function clearSelection() { sel.clear(); updateSelectionBar(); renderMain(); }
 function rotatePhoto(photoIdx, dir) {
   const p = state.photos[photoIdx];
   if (!p) return;
-  p.rotation = (((p.rotation || 0) + (dir === 'cw' ? 90 : -90)) + 360) % 360;
+  const degrees = dir === 'cw' ? 90 : 270;
+
+  // Bug #5 fix: roteer ook de werkelijke base64 data, niet alleen CSS
+  applyCanvasRotation(p, degrees).then(rotated => {
+    state.photos[photoIdx] = { ...rotated, rotation: 0 };
+    // Update preview in UI
+    document.querySelectorAll(`[data-pi="${photoIdx}"] img`).forEach(img => {
+      img.src = rotated.preview;
+      img.style.transform = '';
+    });
+  });
+
+  // Toon alvast CSS rotatie als preview tijdens verwerking
   document.querySelectorAll(`[data-pi="${photoIdx}"] img`).forEach(img => {
-    img.style.transform = `rotate(${p.rotation}deg)`;
     img.style.transition = 'transform 0.25s ease';
+    img.style.transform = `rotate(${degrees}deg)`;
   });
 }
 

@@ -317,7 +317,8 @@
       const dt = new DataTransfer();
       files.forEach(f => dt.items.add(f));
       const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'files')?.set;
-      if (setter) setter.call(input, dt.files);
+      if (!setter) return false; // Bug #11: geen setter = methode werkt niet
+      setter.call(input, dt.files);
       input.dispatchEvent(new Event('change', { bubbles: true }));
       await sleep(300);
       return true;

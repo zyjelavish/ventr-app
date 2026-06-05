@@ -96,14 +96,24 @@ async function crosslist(item, platform) {
 
   const tab = await chrome.tabs.create({ url });
 
-  chrome.tabs.onUpdated.addListener(function listener(tabId, info) {
+  // Bug #9 fix: ook opruimen als tab gesloten wordt
+  function updatedListener(tabId, info) {
     if (tabId !== tab.id || info.status !== 'complete') return;
-    chrome.tabs.onUpdated.removeListener(listener);
+    cleanup();
     setTimeout(() => {
       chrome.tabs.sendMessage(tab.id, { type: 'VENTR_FILL_LISTING', item, platform })
-        .catch(() => {}); // tab kan nog niet klaar zijn
+        .catch(() => {});
     }, 2500);
-  });
+  }
+  function removedListener(tabId) {
+    if (tabId === tab.id) cleanup();
+  }
+  function cleanup() {
+    chrome.tabs.onUpdated.removeListener(updatedListener);
+    chrome.tabs.onRemoved.removeListener(removedListener);
+  }
+  chrome.tabs.onUpdated.addListener(updatedListener);
+  chrome.tabs.onRemoved.addListener(removedListener);
 
   return tab.id;
 }

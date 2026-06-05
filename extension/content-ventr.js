@@ -43,13 +43,18 @@ window.addEventListener('message', e => {
     return;
   }
 
-  // Overige berichten via background
+  // Overige berichten via background (VENTR_CROSSLIST, VENTR_OPEN_*, etc.)
   try {
     chrome.runtime.sendMessage(msg, response => {
-      if (chrome.runtime.lastError) return;
+      if (chrome.runtime.lastError) {
+        console.warn('[VENTR] background niet bereikbaar:', chrome.runtime.lastError.message);
+        return;
+      }
       window.postMessage({ type: msg.type + '_RESPONSE', ...response }, '*');
     });
-  } catch(e) {}
+  } catch(e) {
+    console.warn('[VENTR] sendMessage exception:', e.message);
+  }
 });
 
 // ── DIRECTE STORAGE OPERATIES ─────────────────────────────────────────────────
