@@ -2225,10 +2225,36 @@ async function catDelete(id) {
 }
 
 async function catSendToQueue(item) {
-  if (!state_ext.ready) { showToast('⚠️ Extensie niet gevonden'); return; }
-  window.postMessage({ type: 'VENTR_ADD_TO_QUEUE', item: { id: item.id, listing: item.listing, photos: item.photos } }, '*');
-  await catUpdate(item.id, { status: 'queued' });
-  showToast(`📥 "${item.listing.titel?.slice(0,30)}" naar wachtrij`);
+  if (!state_ext.ready) {
+    showToast('⚠️ Extensie niet gevonden — herlaad de pagina (F5)');
+    return;
+  }
+
+  showToast('📥 Bezig...');
+
+  // Wacht op echte bevestiging van de extensie (max 5 seconden)
+  const ok = await new Promise(res => {
+    const handler = e => {
+      if (e.data?.type === 'VENTR_ADD_TO_QUEUE_RESPONSE') {
+        window.removeEventListener('message', handler);
+        res(e.data.ok !== false);
+      }
+    };
+    window.addEventListener('message', handler);
+    window.postMessage({
+      type: 'VENTR_ADD_TO_QUEUE',
+      item: { id: item.id, listing: item.listing, photos: item.photos }
+    }, '*');
+    setTimeout(() => { window.removeEventListener('message', handler); res(false); }, 5000);
+  });
+
+  if (ok) {
+    await catUpdate(item.id, { status: 'queued' });
+    showToast(`✅ "${item.listing.titel?.slice(0,30)}" staat in de wachtrij`);
+  } else {
+    showToast('❌ Wachtrij mislukt — herlaad ventr.nl (F5) en probeer opnieuw');
+  }
+
   if (state.phase === 'catalog') renderCatalog();
 }
 
