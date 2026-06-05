@@ -1251,8 +1251,18 @@ body.platform-markt { --rg: #2E86C1; --rg-light: #AED6F1; --rg-pale: #EBF5FB; --
       </p>
     </div>
 
-    <!-- Catalogus knop -->
-    <button onclick="showCatalog()" style="margin:0 20px 10px;width:calc(100% - 40px);padding:8px 16px;border-radius:8px;background:var(--champagne);border:1px solid var(--rg-light);font-family:'DM Sans',sans-serif;font-size:11px;font-weight:500;letter-spacing:1px;text-transform:uppercase;color:var(--rose-deep);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:all 0.2s">
+    <!-- Actie knoppen bovenaan -->
+    <div style="margin:8px 20px 0;display:flex;gap:6px">
+      <button onclick="showCatalog()" style="flex:1;padding:7px 10px;border-radius:8px;background:var(--champagne);border:1px solid var(--rg-light);font-family:'DM Sans',sans-serif;font-size:10px;font-weight:500;letter-spacing:1px;text-transform:uppercase;color:var(--rose-deep);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px">
+        📚 <span id="catBadge" style="background:var(--rg);color:white;border-radius:20px;padding:1px 6px;font-size:9px;font-weight:700"></span>
+      </button>
+      <button onclick="resetSession()" style="flex:1;padding:7px 10px;border-radius:8px;background:var(--champagne);border:1px solid var(--silver);font-family:'DM Sans',sans-serif;font-size:10px;font-weight:500;letter-spacing:1px;text-transform:uppercase;color:var(--warm-gray);cursor:pointer" title="Nieuwe sessie starten">
+        🔄 Reset
+      </button>
+    </div>
+
+    <!-- Catalogus knop (verborgen, badge zit hierboven) -->
+    <button onclick="showCatalog()" style="display:none" style="margin:0 20px 10px;width:calc(100% - 40px);padding:8px 16px;border-radius:8px;background:var(--champagne);border:1px solid var(--rg-light);font-family:'DM Sans',sans-serif;font-size:11px;font-weight:500;letter-spacing:1px;text-transform:uppercase;color:var(--rose-deep);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:all 0.2s">
       📚 Catalogus <span id="catBadge" style="background:var(--rg);color:white;border-radius:20px;padding:1px 7px;font-size:9px;font-weight:700"></span>
     </button>
 
@@ -1808,13 +1818,45 @@ function updateFilterToggle() {
 
 // ── FILES ──────────────────────────────────────────────────────────────────
 
+const MAX_PHOTOS = 30;
+
 async function handleFiles(files) {
   if (!files.length) return;
-  const newPhotos = await Promise.all(Array.from(files).map(readFile));
+  const arr = Array.from(files);
+
+  // Waarschuw bij te veel foto's
+  if (state.photos.length + arr.length > MAX_PHOTOS) {
+    const remaining = Math.max(0, MAX_PHOTOS - state.photos.length);
+    if (remaining === 0) {
+      showToast(`⚠️ Maximum ${MAX_PHOTOS} foto's bereikt — start een nieuwe sessie`);
+      return;
+    }
+    showToast(`⚠️ Max ${MAX_PHOTOS} foto's — eerste ${remaining} worden geladen`);
+    arr.splice(remaining);
+  }
+
+  showToast(`📸 ${arr.length} foto's laden...`);
+  // Verwerk in kleine batches zodat browser niet vastloopt
+  const newPhotos = [];
+  for (let i = 0; i < arr.length; i += 5) {
+    const batch = await Promise.all(arr.slice(i, i+5).map(readFile));
+    newPhotos.push(...batch);
+  }
   state.photos = [...state.photos, ...newPhotos];
   state.phase = 'upload';
   state.groups = [];
   renderAll();
+}
+
+function resetSession() {
+  if (state.phase === 'generating' || state.phase === 'grouping') {
+    if (!confirm('Bezig met verwerken — weet je zeker dat je wilt resetten?')) return;
+  }
+  state.photos = []; state.groups = [];
+  state.phase = 'upload'; state.groupingProgress = '';
+  if (typeof sel !== 'undefined') sel.clear();
+  renderAll();
+  showToast('🔄 Nieuwe sessie gestart');
 }
 
 function handleDrop(e) {
