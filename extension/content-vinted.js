@@ -1,25 +1,30 @@
-// VENTR Connect — Content script op Vinted
-// Vult advertentieformulier automatisch in incl. dropdowns
+// VENTR Connect — Content script op Vinted v3
+// Volledig herschreven met robuuste React-compatibele invulmethoden
 
 (function () {
   'use strict';
 
-  let queue = [];
-  let panelEl = null;
+  let queue     = [];
+  let panelEl   = null;
   let currentItem = null;
   let isPlacing = false;
 
   function init() {
     loadQueue();
     injectPanel();
-    setInterval(loadQueue, 5000);
-  }
+    setInterval(loadQueue, 8000);
 
-  function loadQueue() {
-    chrome.runtime.sendMessage({ type: 'VENTR_GET_QUEUE' }, res => {
-      if (chrome.runtime.lastError) return;
-      queue = (res?.queue || []).filter(q => q.status === 'pending');
-      updatePanel();
+    // Luister naar berichten van background (crosslist flow)
+    chrome.runtime.onMessage.addListener((msg) => {
+      if (msg.type === 'VENTR_FILL_LISTING' && msg.item) {
+        currentItem = msg.item;
+        setTimeout(() => placeItem(currentItem), 1500);
+      }
+      if (msg.type === 'VENTR_CHECK_ACTIVITY') {
+        const badge = document.querySelector('[data-testid="inbox-notification-count"], [class*="unread-count"]');
+        const unread = badge ? (parseInt(badge.textContent) || 1) : 0;
+        if (unread > 0) chrome.runtime.sendMessage({ type: 'VENTR_ACTIVITY_UPDATE', data: { newMessages: unread } });
+      }
     });
   }
 
@@ -53,6 +58,14 @@
     updatePanel();
   }
 
+  function loadQueue() {
+    chrome.runtime.sendMessage({ type: 'VENTR_GET_QUEUE' }, res => {
+      if (chrome.runtime.lastError) return;
+      queue = (res?.queue || []).filter(q => q.status === 'pending');
+      updatePanel();
+    });
+  }
+
   function updatePanel() {
     if (!panelEl) return;
     const badge = document.getElementById('ventr-count-badge');
@@ -65,22 +78,22 @@
     list.innerHTML = queue.map(item => `
       <div class="ventr-item ${currentItem?.id === item.id ? 'ventr-item-active' : ''}">
         <div class="ventr-item-photos">
-          ${(item.photos || []).slice(0, 3).map(p => `<img src="${p.preview || p}" alt="">`).join('')}
+          ${(item.photos||[]).slice(0,3).map(p=>`<img src="${p.preview||p}" alt="">`).join('')}
         </div>
         <div class="ventr-item-info">
-          <div class="ventr-item-title">${esc(item.listing?.titel || '')}</div>
-          <div class="ventr-item-meta">€${item.listing?.prijs} · ${esc(item.listing?.staat || '')} · ${esc(item.listing?.maat || '')}</div>
+          <div class="ventr-item-title">${esc(item.listing?.titel||'')}</div>
+          <div class="ventr-item-meta">€${item.listing?.prijs} · ${esc(item.listing?.staat||'')} · ${esc(item.listing?.maat||'')}</div>
         </div>
         <div class="ventr-item-actions">
-          <button class="ventr-btn-place" data-id="${item.id}" ${isPlacing ? 'disabled' : ''}>
+          <button class="ventr-btn-place" data-id="${item.id}" ${isPlacing?'disabled':''}>
             ${currentItem?.id === item.id && isPlacing ? '⏳' : '▶ Plaatsen'}
           </button>
-          <button class="ventr-btn-remove" data-id="${item.id}" title="Verwijder">✕</button>
+          <button class="ventr-btn-remove" data-id="${item.id}">✕</button>
         </div>
       </div>`).join('');
 
     list.querySelectorAll('.ventr-btn-place').forEach(btn =>
-      btn.addEventListener('click', () => placeItem(btn.dataset.id)));
+      btn.addEventListener('click', () => placeItem(queue.find(q => q.id === btn.dataset.id))));
     list.querySelectorAll('.ventr-btn-remove').forEach(btn =>
       btn.addEventListener('click', () => {
         chrome.runtime.sendMessage({ type: 'VENTR_REMOVE_FROM_QUEUE', id: btn.dataset.id }, () => loadQueue());
@@ -92,141 +105,349 @@
     if (el) { el.textContent = msg; el.className = 'ventr-status-' + type; }
   }
 
-  // ── PLAATSEN ────────────────────────────────────────────────────────────────
+  // ── HOOFD PLAATSEN FLOW ────────────────────────────────────────────────────
 
-  async function placeItem(id) {
-    const item = queue.find(q => q.id === id);
+  async function placeItem(item) {
     if (!item || isPlacing) return;
-    currentItem = item; isPlacing = true; updatePanel();
 
-    const onPage = window.location.pathname.includes('/sell')
-      || window.location.pathname.includes('/items/new')
-      || window.location.pathname.includes('/verkopen')
-      || window.location.pathname.includes('/vendre');
-
-    if (!onPage) {
+    // Controleer of we op de juiste pagina zijn
+    const onSellPage = /\/(verkopen|items\/new|sell|vendre|verkaufen)/i.test(location.pathname);
+    if (!onSellPage) {
       setStatus('Ga naar Vinted → Verkopen om te starten', 'warn');
-      isPlacing = false; currentItem = null; updatePanel(); return;
+      return;
     }
 
+    currentItem = item; isPlacing = true; updatePanel();
+
     try {
+      // Wacht op het formulier
+      setStatus('⏳ Wacht op formulier...', 'info');
+      await waitForElement('input, textarea', 8000);
+
+      // STAP 1: Foto's
       setStatus('📸 Foto\'s uploaden...', 'info');
-      await uploadPhotos(item.photos);
+      const fotoResult = await uploadPhotosRobust(item.photos);
+      if (!fotoResult) setStatus('⚠️ Foto\'s handmatig uploaden — rest wordt ingevuld', 'warn');
       await sleep(2000);
 
+      // STAP 2: Tekstvelden
       setStatus('✏️ Titel invullen...', 'info');
-      await fillInput(findTitle(), item.listing.titel?.slice(0, 60));
-      await sleep(300);
+      await fillTitle(item.listing.titel);
+      await sleep(600);
 
       setStatus('📝 Beschrijving invullen...', 'info');
-      await fillInput(findDescription(), item.listing.beschrijving);
-      await sleep(300);
+      await fillDescription(item.listing.beschrijving);
+      await sleep(600);
 
       setStatus('💶 Prijs invullen...', 'info');
-      await fillInput(findPrice(), String(item.listing.prijs));
-      await sleep(300);
+      await fillPrice(item.listing.prijs);
+      await sleep(600);
 
+      // STAP 3: Dropdowns
       setStatus('🏷️ Staat selecteren...', 'info');
-      await fillDropdownByValue(findDropdown('staat|condition|conditie|zustand'), item.listing.staat);
-      await sleep(500);
+      await fillCondition(item.listing.staat);
+      await sleep(800);
 
-      setStatus('📐 Maat selecteren...', 'info');
-      await fillDropdownByValue(findDropdown('maat|size|größe|taille'), item.listing.maat);
-      await sleep(500);
-
-      setStatus('🗂️ Categorie selecteren...', 'info');
-      await fillDropdownByValue(findDropdown('categorie|category|catégorie'), item.listing.categorie);
-      await sleep(500);
+      setStatus('📐 Maat invullen...', 'info');
+      await fillSize(item.listing.maat);
+      await sleep(600);
 
       setStatus('✅ Klaar! Controleer en klik Publiceer 🎉', 'success');
       chrome.runtime.sendMessage({ type: 'VENTR_MARK_DONE', id: item.id });
 
     } catch (err) {
       setStatus('❌ ' + err.message, 'error');
+      console.error('[VENTR]', err);
     }
 
     isPlacing = false; currentItem = null;
     loadQueue(); updatePanel();
   }
 
-  // ── FORMULIER HELPERS ──────────────────────────────────────────────────────
+  // ── FOTO UPLOAD — 3 METHODEN ───────────────────────────────────────────────
 
-  function findEl(selectors) {
-    for (const s of selectors) {
-      const el = document.querySelector(s);
-      if (el && el.offsetParent !== null) return el; // moet zichtbaar zijn
+  async function uploadPhotosRobust(photos) {
+    if (!photos?.length) return false;
+    const photoData = photos.map(p => p.full || p.preview || p).filter(Boolean);
+    if (!photoData.length) return false;
+
+    // Bouw File objecten
+    const files = [];
+    for (let i = 0; i < photoData.length; i++) {
+      try {
+        const blob = await fetch(photoData[i]).then(r => r.blob());
+        files.push(new File([blob], `ventr-${i+1}.jpg`, { type: 'image/jpeg' }));
+      } catch {}
     }
-    return null;
+    if (!files.length) return false;
+
+    // Methode 1: Directe file input injectie
+    const ok1 = await tryFileInputMethod(files);
+    if (ok1) { await sleep(500); return true; }
+
+    // Methode 2: Klik upload-knop, dan injecteer
+    const ok2 = await tryClickThenInject(files);
+    if (ok2) { await sleep(500); return true; }
+
+    // Methode 3: Drag-and-drop simulatie op dropzone
+    const ok3 = await tryDragDropMethod(files);
+    return ok3;
   }
 
-  function findTitle() {
-    return findEl([
-      'input[data-testid*="title"]', 'input[name="title"]',
-      'input[maxlength="60"]', 'input[maxlength="50"]',
-      'input[placeholder*="titel"]', 'input[placeholder*="title" i]',
+  async function tryFileInputMethod(files) {
+    try {
+      // Zoek alle mogelijke file inputs
+      const inputs = [
+        ...document.querySelectorAll('input[type="file"]')
+      ].filter(el => el.accept?.includes('image') || el.multiple || el.accept === '');
+
+      const input = inputs[0];
+      if (!input) return false;
+
+      const dt = new DataTransfer();
+      files.forEach(f => dt.items.add(f));
+
+      // Methode A: native property setter
+      const nativeSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'files')?.set;
+      if (nativeSetter) {
+        nativeSetter.call(input, dt.files);
+      } else {
+        Object.defineProperty(input, 'files', { value: dt.files, configurable: true });
+      }
+
+      // Stuur alle relevante events
+      input.dispatchEvent(new Event('change',  { bubbles: true, cancelable: true }));
+      input.dispatchEvent(new Event('input',   { bubbles: true, cancelable: true }));
+      input.dispatchEvent(new InputEvent('input', { bubbles: true }));
+
+      await sleep(300);
+
+      // Verificeer: heeft de pagina gereageerd?
+      const preview = document.querySelector('[class*="photo"], [class*="Photo"], [class*="image-preview"], img[src^="blob"]');
+      return !!preview;
+    } catch { return false; }
+  }
+
+  async function tryClickThenInject(files) {
+    try {
+      // Vind en klik de upload-trigger
+      const uploadTriggers = [
+        '[data-testid*="upload"]',
+        '[class*="upload-button"]',
+        '[class*="UploadButton"]',
+        '[class*="photo-uploader"]',
+        '[class*="PhotoUploader"]',
+        'label[for][class*="upload"]',
+        'label[for][class*="photo"]',
+        '[aria-label*="foto" i]',
+        '[aria-label*="photo" i]',
+        '[aria-label*="upload" i]',
+      ];
+
+      let trigger = null;
+      for (const sel of uploadTriggers) {
+        const el = document.querySelector(sel);
+        if (el && el.offsetParent !== null) { trigger = el; break; }
+      }
+
+      if (!trigger) return false;
+      trigger.click();
+      await sleep(500);
+
+      // Zoek nu het file input dat verschenen is
+      const input = document.querySelector('input[type="file"]');
+      if (!input) return false;
+
+      const dt = new DataTransfer();
+      files.forEach(f => dt.items.add(f));
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'files')?.set;
+      if (setter) setter.call(input, dt.files);
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      await sleep(300);
+      return true;
+    } catch { return false; }
+  }
+
+  async function tryDragDropMethod(files) {
+    try {
+      const dropzones = [
+        '[class*="dropzone"]',
+        '[class*="Dropzone"]',
+        '[class*="upload-area"]',
+        '[class*="UploadArea"]',
+        '[class*="photo-upload"]',
+        '[class*="PhotoUpload"]',
+        '[ondrop]',
+        '[class*="drag"]',
+      ];
+
+      let zone = null;
+      for (const sel of dropzones) {
+        const el = document.querySelector(sel);
+        if (el && el.offsetParent !== null) { zone = el; break; }
+      }
+
+      if (!zone) return false;
+
+      const dt = new DataTransfer();
+      files.forEach(f => dt.items.add(f));
+
+      // Simuleer dragenter, dragover, drop
+      ['dragenter','dragover'].forEach(type => {
+        zone.dispatchEvent(new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer: dt }));
+      });
+      await sleep(100);
+      zone.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }));
+      return true;
+    } catch { return false; }
+  }
+
+  // ── TEKSTVELDEN ────────────────────────────────────────────────────────────
+
+  async function fillTitle(text) {
+    if (!text) return;
+    const el = await findInputByPriority([
+      '#title',
+      'input[name="title"]',
+      'input[data-testid="title"]',
+      'input[data-testid*="title" i]',
+      'input[maxlength="60"]',
+      'input[maxlength="50"]',
+      'input[placeholder*="titel" i]',
+      'input[placeholder*="title" i]',
+      'input[aria-label*="titel" i]',
+      'input[aria-label*="title" i]',
     ]);
+    if (el) await reactFill(el, text.slice(0, 60));
   }
 
-  function findDescription() {
-    return findEl([
-      'textarea[data-testid*="description"]', 'textarea[name="description"]',
-      'textarea[placeholder*="beschrijving" i]', 'textarea[placeholder*="description" i]',
+  async function fillDescription(text) {
+    if (!text) return;
+    const el = await findInputByPriority([
+      '#description',
+      'textarea[name="description"]',
+      'textarea[data-testid="description"]',
+      'textarea[data-testid*="description" i]',
+      'textarea[placeholder*="beschrijving" i]',
+      'textarea[placeholder*="description" i]',
+      'textarea[aria-label*="beschrijving" i]',
+      'textarea[aria-label*="description" i]',
       'textarea',
     ]);
+    if (el) await reactFill(el, text);
   }
 
-  function findPrice() {
-    return findEl([
-      'input[data-testid*="price"]', 'input[name="price"]',
-      'input[type="number"]', 'input[placeholder*="prijs" i]',
+  async function fillPrice(price) {
+    if (!price) return;
+    const el = await findInputByPriority([
+      '#price',
+      'input[name="price"]',
+      'input[data-testid="price"]',
+      'input[data-testid*="price" i]',
+      'input[placeholder*="prijs" i]',
       'input[placeholder*="price" i]',
+      'input[aria-label*="prijs" i]',
+      'input[type="number"]',
     ]);
+    if (el) await reactFill(el, String(price));
   }
 
-  function findDropdown(labelPattern) {
-    const re = new RegExp(labelPattern, 'i');
-    // Zoek label met matching tekst
-    const allLabels = [...document.querySelectorAll('label, [class*="label"], [class*="Label"]')];
-    for (const label of allLabels) {
-      if (!re.test(label.textContent)) continue;
-      // Zoek bijbehorende dropdown in de buurt
-      const parent = label.closest('div[class], section, form') || label.parentElement?.parentElement;
-      if (!parent) continue;
-      const trigger = parent.querySelector(
-        'button[aria-haspopup], [role="combobox"], [class*="dropdown"] button, [class*="select"] button, [class*="Select"] button'
+  async function fillSize(maat) {
+    if (!maat) return;
+    // Probeer eerst een tekstveld, dan dropdown
+    const textEl = await findInputByPriority([
+      'input[name="size"]',
+      'input[data-testid*="size" i]',
+      'input[placeholder*="maat" i]',
+      'input[placeholder*="size" i]',
+    ]);
+    if (textEl) { await reactFill(textEl, maat.split(' ')[0]); return; }
+
+    // Anders dropdown
+    const sizeNum = maat.match(/\d+/)?.[0] || '';
+    await clickDropdownOption(['maat', 'size'], sizeNum || maat);
+  }
+
+  // ── DROPDOWN / STAAT ───────────────────────────────────────────────────────
+
+  async function fillCondition(staat) {
+    if (!staat) return;
+
+    // Vinted toont staat als klikbare chips/buttons
+    const conditionMap = {
+      'Nieuw met label':    ['nieuw met label', 'new with tags', 'brand new'],
+      'Nieuw zonder label': ['nieuw zonder label', 'new without tags', 'nieuw'],
+      'Zeer goed':          ['zeer goed', 'very good', 'uitstekend'],
+      'Goed':               ['goed', 'good'],
+      'Redelijk':           ['redelijk', 'satisfactory', 'voldoende'],
+    };
+
+    const terms = conditionMap[staat] || [staat.toLowerCase()];
+
+    // Methode 1: Zoek klikbare chips/buttons met matching tekst
+    for (const term of terms) {
+      const buttons = [...document.querySelectorAll('button, [role="radio"], [role="option"], label, [class*="chip"], [class*="Chip"], [class*="condition"], [class*="Condition"]')];
+      const match = buttons.find(el =>
+        el.offsetParent !== null &&
+        el.textContent?.trim().toLowerCase() === term.toLowerCase()
       );
-      if (trigger) return trigger;
+      if (match) {
+        match.click();
+        await sleep(300);
+        return;
+      }
     }
-    // Fallback: zoek via aria-label
-    return findEl([
-      `[aria-label*="${labelPattern}" i]`,
-      `button[data-testid*="${labelPattern}" i]`,
-    ]);
+
+    // Methode 2: Dropdown openen en optie kiezen
+    await clickDropdownOption(['staat', 'condition', 'conditie', 'zustand'], terms[0]);
   }
 
-  async function fillInput(el, value) {
-    if (!el || !value) return;
-    el.focus();
-    el.select?.();
-    const setter = Object.getOwnPropertyDescriptor(
-      el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype, 'value'
-    )?.set;
-    if (setter) setter.call(el, value);
-    el.dispatchEvent(new Event('input',  { bubbles: true }));
-    el.dispatchEvent(new Event('change', { bubbles: true }));
-    el.dispatchEvent(new Event('blur',   { bubbles: true }));
-  }
+  async function clickDropdownOption(labelTerms, valueText) {
+    // Zoek de dropdown trigger via label-tekst in de buurt
+    const allLabels = [...document.querySelectorAll('label, [class*="label"], [class*="Label"], legend, h3, h4, span')];
 
-  async function fillDropdownByValue(trigger, value) {
-    if (!trigger || !value) return false;
+    let trigger = null;
+    for (const label of allLabels) {
+      const labelText = label.textContent?.toLowerCase() || '';
+      if (labelTerms.some(t => labelText.includes(t.toLowerCase()))) {
+        // Zoek dropdown-trigger in de buurt
+        const container = label.closest('div[class], section, form, fieldset') || label.parentElement?.parentElement;
+        if (!container) continue;
+        const t = container.querySelector(
+          'button[aria-expanded], [role="combobox"], [class*="select"] button, [class*="Select"] button, [class*="dropdown"] button, [class*="Dropdown"] button'
+        );
+        if (t && t.offsetParent !== null) { trigger = t; break; }
+      }
+    }
+
+    if (!trigger) {
+      // Fallback: zoek op basis van aria-labels
+      for (const term of labelTerms) {
+        const t = document.querySelector(
+          `[aria-label*="${term}" i][aria-expanded], [data-testid*="${term}" i]`
+        );
+        if (t && t.offsetParent !== null) { trigger = t; break; }
+      }
+    }
+
+    if (!trigger) return false;
+
+    // Klik om dropdown te openen
     trigger.click();
-    await sleep(600);
+    await sleep(700);
 
-    // Zoek naar opties in geopend dropdown
+    // Zoek optie globaal (Vinted gebruikt React portals buiten de main DOM)
     const optionSelectors = [
-      '[role="option"]', '[role="listbox"] li', '[role="listbox"] [role="option"]',
-      '[class*="dropdown__item"]', '[class*="dropdownItem"]', '[class*="option"]',
-      '[class*="Option"]', 'ul li', '[class*="list"] li',
+      '[role="option"]',
+      '[role="listbox"] li',
+      '[role="listbox"] [role="option"]',
+      '[class*="dropdown__item"]',
+      '[class*="dropdownItem"]',
+      '[class*="SelectOption"]',
+      '[class*="select-option"]',
+      '[class*="option"]',
+      'ul li',
+      '[class*="list-item"]',
     ];
 
     let options = [];
@@ -236,87 +457,89 @@
     }
 
     if (options.length === 0) {
-      // Sluit dropdown en geef op
+      // Sluit dropdown
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
       return false;
     }
 
-    // Normaliseer zoekwaarde voor matching
-    const searchTerms = normalizeValue(value);
+    // Zoek beste match
+    const searchLower = valueText.toLowerCase();
     let best = null;
     let bestScore = 0;
 
     for (const opt of options) {
-      const text = normalizeValue(opt.textContent);
-      const score = matchScore(text, searchTerms);
-      if (score > bestScore) { bestScore = score; best = opt; }
+      const text = opt.textContent?.toLowerCase() || '';
+      // Exacte match
+      if (text === searchLower) { best = opt; break; }
+      // Gedeeltelijke match
+      if (text.includes(searchLower) || searchLower.includes(text)) {
+        const score = Math.min(text.length, searchLower.length) / Math.max(text.length, searchLower.length);
+        if (score > bestScore) { bestScore = score; best = opt; }
+      }
     }
 
-    if (best && bestScore > 0) {
+    if (best) {
       best.click();
       await sleep(300);
       return true;
     }
 
-    // Niets gevonden — sluit dropdown
+    // Niets gevonden, sluit dropdown
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     return false;
   }
 
-  function normalizeValue(str) {
-    return String(str).toLowerCase()
-      .replace(/[\/\-\(\)\.]/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-  }
+  // ── REACT-COMPATIBELE INPUT INVULLING ──────────────────────────────────────
 
-  function matchScore(text, search) {
-    // Hoe hoog is de overlap tussen text en search?
-    const searchWords = search.split(' ').filter(w => w.length > 1);
-    let hits = 0;
-    for (const word of searchWords) {
-      if (text.includes(word)) hits++;
+  async function reactFill(el, value) {
+    if (!el) return;
+    el.focus();
+    el.click();
+    await sleep(50);
+
+    // Leeg het veld eerst (React-compatibel)
+    const isTextarea = el.tagName === 'TEXTAREA';
+    const proto = isTextarea ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+    const nativeSetter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+
+    if (nativeSetter) {
+      nativeSetter.call(el, '');
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      await sleep(30);
+      nativeSetter.call(el, value);
+    } else {
+      el.value = value;
     }
-    return hits / Math.max(searchWords.length, 1);
+
+    // Stuur alle events die React verwacht
+    el.dispatchEvent(new Event('input',  { bubbles: true, cancelable: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+    el.dispatchEvent(new Event('blur',   { bubbles: true }));
+
+    await sleep(100);
   }
 
-  // ── FOTO UPLOAD ────────────────────────────────────────────────────────────
+  // ── HELPERS ────────────────────────────────────────────────────────────────
 
-  async function uploadPhotos(photos) {
-    if (!photos?.length) return false;
-
-    // Gebruik full-kwaliteit foto's als beschikbaar, anders preview
-    const photoData = photos.map(p => p.full || p.preview || p);
-
-    const input = findEl([
-      'input[type="file"][multiple]',
-      'input[type="file"][accept*="image"]',
-      'input[type="file"]',
-    ]);
-
-    if (!input) return false;
-
-    const dt = new DataTransfer();
-    for (let i = 0; i < photoData.length; i++) {
+  async function findInputByPriority(selectors) {
+    for (const sel of selectors) {
       try {
-        const blob = await fetch(photoData[i]).then(r => r.blob());
-        dt.items.add(new File([blob], `ventr-${i + 1}.jpg`, { type: 'image/jpeg' }));
-      } catch { /* skip */ }
+        const el = document.querySelector(sel);
+        if (el && el.offsetParent !== null) return el;
+      } catch {}
     }
-
-    if (dt.files.length === 0) return false;
-
-    const nativeSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'files')?.set;
-    if (nativeSetter) nativeSetter.call(input, dt.files);
-    else Object.defineProperty(input, 'files', { value: dt.files, configurable: true });
-
-    input.dispatchEvent(new Event('change', { bubbles: true }));
-    input.dispatchEvent(new Event('input',  { bubbles: true }));
-    await sleep(800);
-    return true;
+    return null;
   }
 
-  // ── UTILS ──────────────────────────────────────────────────────────────────
+  async function waitForElement(selector, maxMs = 6000) {
+    const start = Date.now();
+    while (Date.now() - start < maxMs) {
+      const el = document.querySelector(selector);
+      if (el && el.offsetParent !== null) return el;
+      await sleep(400);
+    }
+    return null;
+  }
 
   function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
   function esc(s) {
