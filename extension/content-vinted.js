@@ -58,18 +58,48 @@
     updatePanel();
   }
 
+  let retryCount = 0;
+
   function loadQueue() {
+    // Check of chrome.runtime überhaupt beschikbaar is
+    if (typeof chrome === 'undefined' || !chrome.runtime || !chrome.runtime.id) {
+      // Runtime nog niet beschikbaar — wacht en probeer opnieuw
+      if (retryCount < 5) {
+        retryCount++;
+        setTimeout(loadQueue, 1000);
+      } else {
+        showContextInvalidatedWarning();
+      }
+      return;
+    }
+
+    retryCount = 0;
     try {
       chrome.runtime.sendMessage({ type: 'VENTR_GET_QUEUE' }, res => {
         if (chrome.runtime.lastError) {
-          showContextInvalidatedWarning();
+          const msg = chrome.runtime.lastError.message || '';
+          if (msg.includes('invalidated') || msg.includes('connection') || msg.includes('Receiving end')) {
+            // Probeer nog 3x voor we de waarschuwing tonen
+            if (retryCount < 3) {
+              retryCount++;
+              setTimeout(loadQueue, 1500);
+            } else {
+              showContextInvalidatedWarning();
+            }
+          }
           return;
         }
+        retryCount = 0;
         queue = (res?.queue || []).filter(q => q.status === 'pending');
         updatePanel();
       });
     } catch (e) {
-      if (e.message?.includes('Extension context')) showContextInvalidatedWarning();
+      if (retryCount < 3) {
+        retryCount++;
+        setTimeout(loadQueue, 1500);
+      } else {
+        showContextInvalidatedWarning();
+      }
     }
   }
 

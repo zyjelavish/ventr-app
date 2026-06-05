@@ -1,31 +1,27 @@
 // VENTR Connect — Background Service Worker v2
-// Beheert: queue, notifications, repost scheduler, liker monitor, context menu
+// DEFENSIVE VERSION — alles in try-catch zodat crashes worden voorkomen
 
 // ── INIT ─────────────────────────────────────────────────────────────────────
 
 chrome.runtime.onInstalled.addListener(() => {
-  setupContextMenu();
-  setupAlarms();
+  try { setupContextMenu(); } catch(e) { console.warn('[VENTR] contextMenu setup:', e); }
+  try { setupAlarms(); }      catch(e) { console.warn('[VENTR] alarms setup:', e); }
 });
 
 chrome.runtime.onStartup.addListener(() => {
-  setupAlarms();
+  try { setupAlarms(); } catch(e) { console.warn('[VENTR] alarms startup:', e); }
 });
 
 // ── CONTEXT MENU ───────────────────────────────────────────────────────────────
 
 function setupContextMenu() {
+  if (!chrome.contextMenus) return;
   chrome.contextMenus.removeAll(() => {
-    chrome.contextMenus.create({
-      id: 'ventr-add-image',
-      title: '📸 Voeg toe aan VENTR listing',
-      contexts: ['image'],
-    });
-    chrome.contextMenus.create({
-      id: 'ventr-add-page',
-      title: '🛍️ Importeer product naar VENTR',
-      contexts: ['page'],
-    });
+    if (chrome.runtime.lastError) return;
+    try {
+      chrome.contextMenus.create({ id: 'ventr-add-image', title: '📸 Voeg toe aan VENTR listing', contexts: ['image'] });
+      chrome.contextMenus.create({ id: 'ventr-add-page',  title: '🛍️ Importeer product naar VENTR', contexts: ['page'] });
+    } catch(e) { console.warn('[VENTR] contextMenu create:', e); }
   });
 }
 
@@ -65,12 +61,12 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
 // ── ALARMS & SCHEDULER ────────────────────────────────────────────────────────
 
 function setupAlarms() {
-  // Vinted monitor: elke 15 minuten checken op likers/berichten
-  chrome.alarms.create('ventr-vinted-monitor', { periodInMinutes: 15 });
-  // Repost checker: elk uur
-  chrome.alarms.create('ventr-repost-check', { periodInMinutes: 60 });
-  // Dynamische prijsverlaging: dagelijks om 02:00
-  chrome.alarms.create('ventr-price-drop', { when: nextOccurrenceOf(2, 0), periodInMinutes: 1440 });
+  if (!chrome.alarms) return;
+  try {
+    chrome.alarms.create('ventr-vinted-monitor', { periodInMinutes: 15 });
+    chrome.alarms.create('ventr-repost-check',   { periodInMinutes: 60 });
+    chrome.alarms.create('ventr-price-drop',     { when: nextOccurrenceOf(2, 0), periodInMinutes: 1440 });
+  } catch(e) { console.warn('[VENTR] alarms create:', e); }
 }
 
 function nextOccurrenceOf(hour, minute) {
@@ -81,11 +77,15 @@ function nextOccurrenceOf(hour, minute) {
   return target.getTime();
 }
 
-chrome.alarms.onAlarm.addListener(alarm => {
-  if (alarm.name === 'ventr-vinted-monitor') checkVintedActivity();
-  if (alarm.name === 'ventr-repost-check')   checkRepostSchedule();
-  if (alarm.name === 'ventr-price-drop')      checkPriceDropRules();
-});
+if (chrome.alarms) {
+  chrome.alarms.onAlarm.addListener(alarm => {
+    try {
+      if (alarm.name === 'ventr-vinted-monitor') checkVintedActivity();
+      if (alarm.name === 'ventr-repost-check')   checkRepostSchedule();
+      if (alarm.name === 'ventr-price-drop')      checkPriceDropRules();
+    } catch(e) { console.warn('[VENTR] alarm handler:', e); }
+  });
+}
 
 // ── VINTED ACTIVITY MONITOR ───────────────────────────────────────────────────
 
@@ -181,6 +181,8 @@ function notify(title, message, type = 'info') {
 // ── QUEUE MANAGEMENT ──────────────────────────────────────────────────────────
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  // Defensief: vang alle fouten op zodat de service worker niet crasht
+  try {
 
   if (msg.type === 'VENTR_ADD_TO_QUEUE') {
     addToQueue(msg.item).then(queue => sendResponse({ ok: true, count: queue.filter(q=>q.status==='pending').length }));
@@ -258,6 +260,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     chrome.storage.local.set({ ventr_draft_images: [] }, () => sendResponse({ ok: true }));
     return true;
   }
+
+  } catch(e) {
+    console.error('[VENTR] message handler crash:', e, msg?.type);
+    try { sendResponse({ ok: false, error: e.message }); } catch {}
+  }
 });
 
 // ── CROSSLISTING ──────────────────────────────────────────────────────────────
@@ -267,25 +274,24 @@ async function handleCrosslist(item, platform, sendResponse) {
     let url;
     if (platform === 'marktplaats') url = 'https://www.marktplaats.nl/plaats-advertentie';
     if (platform === 'facebook')    url = 'https://www.facebook.com/marketplace/create/item';
+    if (!url) { sendResponse({ ok: false, error: 'Onbekend platform' }); return; }
 
     const tab = await chrome.tabs.create({ url });
 
-    // Wacht tot tab geladen is, stuur dan item data
     const listener = (tabId, info) => {
       if (tabId !== tab.id || info.status !== 'complete') return;
       chrome.tabs.onUpdated.removeListener(listener);
       setTimeout(() => {
-        chrome.tabs.sendMessage(tab.id, {
-          type: 'VENTR_FILL_LISTING',
-          item,
-          platform,
-        });
-      }, 2000);
+        try {
+          chrome.tabs.sendMessage(tab.id, { type: 'VENTR_FILL_LISTING', item, platform });
+        } catch(e) { console.warn('[VENTR] crosslist fill:', e); }
+      }, 2500);
     };
     chrome.tabs.onUpdated.addListener(listener);
     sendResponse({ ok: true, tabId: tab.id });
   } catch (err) {
-    sendResponse({ ok: false, error: err.message });
+    console.error('[VENTR] crosslist:', err);
+    try { sendResponse({ ok: false, error: err.message }); } catch {}
   }
 }
 
