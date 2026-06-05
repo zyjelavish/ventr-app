@@ -68,9 +68,29 @@ function getQueueDirect() {
 async function addToQueueDirect(item) {
   const queue = await getQueueDirect();
   const idx = queue.findIndex(q => q.id === item.id);
-  const entry = { ...item, status: 'pending', addedAt: item.addedAt || Date.now() };
+
+  // Sla alleen preview op (niet full) — anders wordt queue te groot voor chrome.storage
+  const photos = (item.photos || []).map(p => ({
+    preview: p.preview || p  // alleen kleine thumbnail
+  }));
+
+  const entry = { ...item, photos, status: 'pending', addedAt: item.addedAt || Date.now() };
   if (idx >= 0) queue[idx] = entry; else queue.push(entry);
-  await new Promise(res => chrome.storage.local.set({ ventr_queue: queue }, res));
+
+  try {
+    await new Promise((res, rej) => {
+      chrome.storage.local.set({ ventr_queue: queue }, () => {
+        if (chrome.runtime.lastError) rej(new Error(chrome.runtime.lastError.message));
+        else res();
+      });
+    });
+  } catch(e) {
+    // Queue te groot — verwijder oudste items en probeer opnieuw
+    console.warn('[VENTR] Queue opslaan mislukt, oudste items verwijderen:', e.message);
+    const trimmed = queue.slice(-20); // Bewaar max 20 meest recente
+    await new Promise(res => chrome.storage.local.set({ ventr_queue: trimmed }, res));
+  }
+
   return queue.filter(q => q.status === 'pending').length;
 }
 
@@ -111,3 +131,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
 // Signaleer aan VENTR dat de extensie actief is
 window.postMessage({ type: 'VENTR_EXTENSION_READY' }, '*');
+
+// Ruim te grote queue items op bij laden
+chrome.storage.local.get('ventr_queue', d => {
+  const q = d.ventr_queue || [];
+  if (q.length > 50) {
+    // Bewaar alleen de 30 meest recente pending items
+    const cleaned = q.filter(i => i.status === 'pending').slice(-30);
+    chrome.storage.local.set({ ventr_queue: cleaned });
+    console.log('[VENTR] Queue opgeschoond:', q.length, '→', cleaned.length, 'items');
+  }
+});
