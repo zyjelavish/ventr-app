@@ -224,7 +224,8 @@
 
   async function uploadPhotosRobust(photos) {
     if (!photos?.length) return false;
-    const photoData = photos.map(p => p.full || p.preview || p).filter(Boolean);
+    // preview is nu 800px hoge kwaliteit — prima voor Vinted upload
+    const photoData = photos.map(p => p.preview || p.full || p).filter(Boolean);
     if (!photoData.length) return false;
 
     // Bouw File objecten

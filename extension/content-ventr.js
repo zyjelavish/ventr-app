@@ -57,6 +57,28 @@ window.addEventListener('message', e => {
   }
 });
 
+// ── FOTO RESIZE VOOR QUEUE ────────────────────────────────────────────────────
+
+function resizeForQueue(dataUrl) {
+  return new Promise((res, rej) => {
+    const img = new Image();
+    img.onload = () => {
+      const MAX = 800; // Optie B + A: 800px is genoeg voor Vinted
+      const scale = Math.min(MAX / img.width, MAX / img.height, 1);
+      const c = document.createElement('canvas');
+      c.width  = Math.round(img.width  * scale);
+      c.height = Math.round(img.height * scale);
+      const ctx = c.getContext('2d');
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high'; // Optie B: bicubische kwaliteit
+      ctx.drawImage(img, 0, 0, c.width, c.height);
+      res({ preview: c.toDataURL('image/jpeg', 0.88) }); // 0.88 = hoge kwaliteit
+    };
+    img.onerror = rej;
+    img.src = dataUrl;
+  });
+}
+
 // ── DIRECTE STORAGE OPERATIES ─────────────────────────────────────────────────
 
 function getQueueDirect() {
@@ -69,9 +91,13 @@ async function addToQueueDirect(item) {
   const queue = await getQueueDirect();
   const idx = queue.findIndex(q => q.id === item.id);
 
-  // Sla alleen preview op (niet full) — anders wordt queue te groot voor chrome.storage
-  const photos = (item.photos || []).map(p => ({
-    preview: p.preview || p  // alleen kleine thumbnail
+  // Sla medium kwaliteit op (600px) — balans tussen kwaliteit en opslaggrootte
+  const photos = await Promise.all((item.photos || []).map(async p => {
+    const src = p.full || p.preview || p;
+    if (!src || typeof src !== 'string' || !src.startsWith('data:')) return { preview: src };
+    try {
+      return await resizeForQueue(src);
+    } catch { return { preview: p.preview || src }; }
   }));
 
   const entry = { ...item, photos, status: 'pending', addedAt: item.addedAt || Date.now() };

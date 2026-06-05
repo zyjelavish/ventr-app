@@ -2365,23 +2365,20 @@ async function photoToQueueThumb(photo) {
   return new Promise(res => {
     const img = new Image();
     img.onload = () => {
-      // Klein: 180px voor UI
-      const scaleThumb = Math.min(180 / img.width, 180 / img.height, 1);
-      const ct = document.createElement('canvas');
-      ct.width  = Math.round(img.width  * scaleThumb);
-      ct.height = Math.round(img.height * scaleThumb);
-      ct.getContext('2d').drawImage(img, 0, 0, ct.width, ct.height);
-      const thumb = ct.toDataURL('image/jpeg', 0.65);
+      // Sla één versie op: 800px bicubisch, 0.88 kwaliteit
+      // Goed genoeg voor Vinted display + past in chrome.storage
+      const MAX = 800;
+      const scale = Math.min(MAX / img.width, MAX / img.height, 1);
+      const c = document.createElement('canvas');
+      c.width  = Math.round(img.width  * scale);
+      c.height = Math.round(img.height * scale);
+      const ctx = c.getContext('2d');
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high'; // bicubisch = scherpere resize
+      ctx.drawImage(img, 0, 0, c.width, c.height);
+      const photo = c.toDataURL('image/jpeg', 0.88);
 
-      // Groot: 1200px voor Vinted upload — hoge kwaliteit
-      const scaleFull = Math.min(1200 / img.width, 1200 / img.height, 1);
-      const cf = document.createElement('canvas');
-      cf.width  = Math.round(img.width  * scaleFull);
-      cf.height = Math.round(img.height * scaleFull);
-      cf.getContext('2d').drawImage(img, 0, 0, cf.width, cf.height);
-      const full = cf.toDataURL('image/jpeg', 0.92);
-
-      res({ preview: thumb, full });
+      res({ preview: photo, full: photo }); // zelfde versie voor UI en upload
     };
     img.onerror = () => res({ preview: photo.preview, full: photo.preview });
     img.src = photo.preview;
