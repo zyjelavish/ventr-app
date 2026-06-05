@@ -599,6 +599,26 @@
     return null;
   }
 
+  // Haal volledige foto's op uit ventr.nl's catalogus (IndexedDB via content-ventr.js)
+  async function fetchFullPhotosFromVentr(itemId) {
+    try {
+      // Vraag content-ventr.js om de foto's op te halen uit de catalogus
+      const response = await new Promise((res) => {
+        const handler = e => {
+          if (e.data?.type === 'VENTR_CATALOG_PHOTOS_RESPONSE' && e.data.itemId === itemId) {
+            window.removeEventListener('message', handler);
+            res(e.data.photos);
+          }
+        };
+        window.addEventListener('message', handler);
+        // Stuur verzoek naar ventr.nl tab via background
+        chrome.runtime.sendMessage({ type: 'VENTR_GET_CATALOG_PHOTOS', itemId }, () => {});
+        setTimeout(() => { window.removeEventListener('message', handler); res(null); }, 5000);
+      });
+      return response;
+    } catch { return null; }
+  }
+
   function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
   function esc(s) {
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');

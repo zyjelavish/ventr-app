@@ -63,9 +63,8 @@ function resizeForQueue(dataUrl) {
   return new Promise((res, rej) => {
     const img = new Image();
     img.onload = () => {
-      // Geen onnodige resize — behoud originele kwaliteit
-      // Alleen verkleinen als foto groter is dan 1600px
-      const MAX = 1600;
+      // 1000px @ 0.92 — balans: ~100KB per foto, goede Vinted kwaliteit, past in storage
+      const MAX = 1000;
       const scale = Math.min(MAX / img.width, MAX / img.height, 1);
       const c = document.createElement('canvas');
       c.width  = Math.round(img.width  * scale);
@@ -74,7 +73,7 @@ function resizeForQueue(dataUrl) {
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = 'high';
       ctx.drawImage(img, 0, 0, c.width, c.height);
-      res({ preview: c.toDataURL('image/jpeg', 0.95) }); // maximale kwaliteit
+      res({ preview: c.toDataURL('image/jpeg', 0.92) });
     };
     img.onerror = rej;
     img.src = dataUrl;
@@ -159,6 +158,16 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
 // Signaleer aan VENTR dat de extensie actief is
 window.postMessage({ type: 'VENTR_EXTENSION_READY' }, '*');
+
+// Luister naar foto-verzoeken van content-vinted.js via background
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg.type === 'VENTR_GET_CATALOG_PHOTOS') {
+    // Haal foto's op uit de catalogus IndexedDB
+    window.postMessage({ type: 'VENTR_FETCH_CATALOG_PHOTOS', itemId: msg.itemId }, '*');
+    sendResponse({ ok: true });
+    return true;
+  }
+});
 
 // Ruim te grote queue items op bij laden
 chrome.storage.local.get('ventr_queue', d => {
