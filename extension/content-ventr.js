@@ -3,13 +3,90 @@
 
 window.addEventListener('message', e => {
   if (e.source !== window || !e.data?.type?.startsWith('VENTR_')) return;
-  if (e.data.type.endsWith('_RESPONSE')) return; // Geen response-loops
+  if (e.data.type.endsWith('_RESPONSE')) return;
 
-  chrome.runtime.sendMessage(e.data, response => {
-    if (chrome.runtime.lastError) return;
-    window.postMessage({ type: e.data.type + '_RESPONSE', ...response }, '*');
-  });
+  const msg = e.data;
+
+  // Queue-operaties direct via chrome.storage — betrouwbaarder dan via background
+  if (msg.type === 'VENTR_ADD_TO_QUEUE') {
+    addToQueueDirect(msg.item).then(count =>
+      window.postMessage({ type: 'VENTR_ADD_TO_QUEUE_RESPONSE', ok: true, count }, '*')
+    );
+    return;
+  }
+
+  if (msg.type === 'VENTR_GET_QUEUE') {
+    getQueueDirect().then(queue =>
+      window.postMessage({ type: 'VENTR_GET_QUEUE_RESPONSE', queue }, '*')
+    );
+    return;
+  }
+
+  if (msg.type === 'VENTR_REMOVE_FROM_QUEUE') {
+    removeFromQueueDirect(msg.id).then(count =>
+      window.postMessage({ type: 'VENTR_REMOVE_FROM_QUEUE_RESPONSE', ok: true, count }, '*')
+    );
+    return;
+  }
+
+  if (msg.type === 'VENTR_MARK_DONE') {
+    markStatusDirect(msg.id, 'done').then(() =>
+      window.postMessage({ type: 'VENTR_MARK_DONE_RESPONSE', ok: true }, '*')
+    );
+    return;
+  }
+
+  if (msg.type === 'VENTR_CLEAR_DONE') {
+    clearDoneDirect().then(count =>
+      window.postMessage({ type: 'VENTR_CLEAR_DONE_RESPONSE', ok: true, count }, '*')
+    );
+    return;
+  }
+
+  // Overige berichten via background
+  try {
+    chrome.runtime.sendMessage(msg, response => {
+      if (chrome.runtime.lastError) return;
+      window.postMessage({ type: msg.type + '_RESPONSE', ...response }, '*');
+    });
+  } catch(e) {}
 });
+
+// ── DIRECTE STORAGE OPERATIES ─────────────────────────────────────────────────
+
+function getQueueDirect() {
+  return new Promise(res =>
+    chrome.storage.local.get('ventr_queue', d => res(d.ventr_queue || []))
+  );
+}
+
+async function addToQueueDirect(item) {
+  const queue = await getQueueDirect();
+  const idx = queue.findIndex(q => q.id === item.id);
+  const entry = { ...item, status: 'pending', addedAt: item.addedAt || Date.now() };
+  if (idx >= 0) queue[idx] = entry; else queue.push(entry);
+  await new Promise(res => chrome.storage.local.set({ ventr_queue: queue }, res));
+  return queue.filter(q => q.status === 'pending').length;
+}
+
+async function removeFromQueueDirect(id) {
+  const queue = (await getQueueDirect()).filter(q => q.id !== id);
+  await new Promise(res => chrome.storage.local.set({ ventr_queue: queue }, res));
+  return queue.length;
+}
+
+async function markStatusDirect(id, status) {
+  const queue = await getQueueDirect();
+  const item = queue.find(q => q.id === id);
+  if (item) item.status = status;
+  await new Promise(res => chrome.storage.local.set({ ventr_queue: queue }, res));
+}
+
+async function clearDoneDirect() {
+  const queue = (await getQueueDirect()).filter(q => q.status !== 'done');
+  await new Promise(res => chrome.storage.local.set({ ventr_queue: queue }, res));
+  return queue.length;
+}
 
 // Vinted activiteitscheck vanuit background
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
