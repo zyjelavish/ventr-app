@@ -63,16 +63,18 @@ function resizeForQueue(dataUrl) {
   return new Promise((res, rej) => {
     const img = new Image();
     img.onload = () => {
-      const MAX = 800; // Optie B + A: 800px is genoeg voor Vinted
+      // Geen onnodige resize — behoud originele kwaliteit
+      // Alleen verkleinen als foto groter is dan 1600px
+      const MAX = 1600;
       const scale = Math.min(MAX / img.width, MAX / img.height, 1);
       const c = document.createElement('canvas');
       c.width  = Math.round(img.width  * scale);
       c.height = Math.round(img.height * scale);
       const ctx = c.getContext('2d');
       ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = 'high'; // Optie B: bicubische kwaliteit
+      ctx.imageSmoothingQuality = 'high';
       ctx.drawImage(img, 0, 0, c.width, c.height);
-      res({ preview: c.toDataURL('image/jpeg', 0.88) }); // 0.88 = hoge kwaliteit
+      res({ preview: c.toDataURL('image/jpeg', 0.95) }); // maximale kwaliteit
     };
     img.onerror = rej;
     img.src = dataUrl;

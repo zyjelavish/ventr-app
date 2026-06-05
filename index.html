@@ -1694,20 +1694,26 @@ function readFile(file) {
           // Stap 1: EXIF rotatie op volledige resolutie (snel)
           let canvas = applyExifRotation(img, orientation);
 
-          // Stap 2: Eerst verkleinen naar max 1200px (VOOR filter — veel sneller!)
-          const MAX_PREVIEW = 1200;
+          // Stap 2: Resize naar max 1600px voor filter (snel + kwaliteit behouden)
+          // Bewust 1600px bewaren — dit is de ENIGE compressie-stap
+          const MAX_PREVIEW = 1600;
           const scale = Math.min(MAX_PREVIEW / canvas.width, MAX_PREVIEW / canvas.height, 1);
           if (scale < 1) {
             const resized = document.createElement('canvas');
             resized.width  = Math.round(canvas.width  * scale);
             resized.height = Math.round(canvas.height * scale);
-            resized.getContext('2d').drawImage(canvas, 0, 0, resized.width, resized.height);
+            const rctx = resized.getContext('2d');
+            rctx.imageSmoothingEnabled = true;
+            rctx.imageSmoothingQuality = 'high';
+            rctx.drawImage(canvas, 0, 0, resized.width, resized.height);
             canvas = resized;
           }
 
-          // Stap 3: VENTR filter op verkleinde afbeelding (~16x sneller)
+          // Stap 3: VENTR filter op verkleinde afbeelding
           if (state.filterEnabled) applyVentrFilter(canvas);
-          const enhanced = canvas.toDataURL('image/jpeg', 0.88);
+
+          // Hoge kwaliteit opslaan — 0.95 zodat volgende bewerking nauwelijks zichtbaar is
+          const enhanced = canvas.toDataURL('image/jpeg', 0.95);
           res({ id: uid(), preview: enhanced, base64: enhanced.split(',')[1], mediaType: 'image/jpeg' });
         } catch {
           res({ id: uid(), preview: raw, base64: raw.split(',')[1], mediaType });
@@ -2365,20 +2371,17 @@ async function photoToQueueThumb(photo) {
   return new Promise(res => {
     const img = new Image();
     img.onload = () => {
-      // Sla één versie op: 800px bicubisch, 0.88 kwaliteit
-      // Goed genoeg voor Vinted display + past in chrome.storage
-      const MAX = 800;
-      const scale = Math.min(MAX / img.width, MAX / img.height, 1);
+      // Geen tweede resize — foto is al op kwaliteit vanuit readFile (1600px, 0.95)
+      // Sla op bij maximale kwaliteit voor Vinted upload
       const c = document.createElement('canvas');
-      c.width  = Math.round(img.width  * scale);
-      c.height = Math.round(img.height * scale);
+      c.width = img.width; c.height = img.height;
       const ctx = c.getContext('2d');
       ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = 'high'; // bicubisch = scherpere resize
-      ctx.drawImage(img, 0, 0, c.width, c.height);
-      const photo = c.toDataURL('image/jpeg', 0.88);
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(img, 0, 0);
+      const photo = c.toDataURL('image/jpeg', 0.95); // geen kwaliteitsverlies
 
-      res({ preview: photo, full: photo }); // zelfde versie voor UI en upload
+      res({ preview: photo, full: photo });
     };
     img.onerror = () => res({ preview: photo.preview, full: photo.preview });
     img.src = photo.preview;
