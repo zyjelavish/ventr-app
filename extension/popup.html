@@ -4,129 +4,149 @@
 <meta charset="UTF-8">
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
-body {
-  width: 280px;
-  font-family: 'DM Sans', -apple-system, sans-serif;
-  font-size: 13px;
-  color: #2C1A14;
-  background: #FDF8F2;
-}
-.header {
-  background: linear-gradient(135deg, #7D3C52, #C9956C);
-  padding: 14px 16px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.logo {
-  color: white;
-  font-weight: 600;
-  letter-spacing: 3px;
-  font-size: 14px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
+body { width:300px; font-family:'DM Sans',-apple-system,sans-serif; font-size:13px; color:#2C1A14; background:#FDF8F2; }
+
+.header { background:linear-gradient(135deg,#7D3C52,#C9956C); padding:12px 16px; display:flex; align-items:center; justify-content:space-between; }
+.logo { color:white; font-weight:600; letter-spacing:3px; font-size:13px; display:flex; align-items:center; gap:8px; }
 .dot { width:7px; height:7px; border-radius:50%; background:#EDD98A; }
-.subtitle { color: rgba(255,255,255,0.75); font-size: 10px; letter-spacing: 1px; margin-left: auto; }
+.subtitle { color:rgba(255,255,255,0.75); font-size:9px; letter-spacing:1px; }
 
-.body { padding: 14px; }
+/* Tabs */
+.tabs { display:flex; background:#F5EBE0; border-bottom:1px solid #E8C4A0; }
+.tab-btn { flex:1; padding:9px 0; border:none; background:transparent; font-size:10px; font-weight:600; letter-spacing:1px; text-transform:uppercase; cursor:pointer; color:#8A7570; font-family:'DM Sans',sans-serif; border-bottom:2px solid transparent; transition:all 0.2s; }
+.tab-btn.active { color:#7D3C52; border-bottom-color:#C9956C; background:rgba(255,255,255,0.5); }
 
-.stat-row {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 14px;
-}
-.stat {
-  flex: 1;
-  background: white;
-  border: 1px solid #E8C4A0;
-  border-radius: 8px;
-  padding: 10px;
-  text-align: center;
-}
-.stat-num {
-  font-size: 24px;
-  font-weight: 300;
-  color: #7D3C52;
-  font-family: 'Georgia', serif;
-  line-height: 1;
-}
-.stat-label {
-  font-size: 9px;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  color: #8A7570;
-  margin-top: 2px;
-}
+.tab-content { padding:12px; }
 
-.queue-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+/* Stats */
+.stat-row { display:flex; gap:8px; margin-bottom:12px; }
+.stat { flex:1; background:white; border:1px solid #E8C4A0; border-radius:8px; padding:10px; text-align:center; }
+.stat-num { font-size:22px; font-weight:300; color:#7D3C52; font-family:Georgia,serif; line-height:1; }
+.stat-label { font-size:9px; text-transform:uppercase; letter-spacing:1px; color:#8A7570; margin-top:2px; }
 
-.queue-item {
-  background: white;
-  border: 1px solid #D4C8C0;
-  border-radius: 8px;
-  padding: 8px 10px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.queue-item.done { opacity: 0.5; }
-.qi-thumb { width: 36px; height: 36px; object-fit: cover; border-radius: 4px; flex-shrink: 0; }
-.qi-info { flex: 1; min-width: 0; }
-.qi-title { font-size: 11px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.qi-price { font-size: 10px; color: #C9956C; font-weight: 600; }
-.qi-status { font-size: 10px; }
-.status-pending { color: #8A7570; }
-.status-done { color: #3A8A3A; }
+/* Queue */
+.queue-list { display:flex; flex-direction:column; gap:5px; margin-bottom:10px; max-height:200px; overflow-y:auto; }
+.queue-item { background:white; border:1px solid #D4C8C0; border-radius:8px; padding:7px 9px; display:flex; align-items:center; gap:8px; }
+.queue-item.done { opacity:0.5; }
+.qi-thumb { width:34px; height:34px; object-fit:cover; border-radius:4px; flex-shrink:0; }
+.qi-info { flex:1; min-width:0; }
+.qi-title { font-size:11px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.qi-price { font-size:10px; color:#C9956C; font-weight:600; }
+.qi-status { font-size:11px; }
+.status-pending { color:#8A7570; }
+.status-done { color:#3A8A3A; }
+.empty { text-align:center; color:#8A7570; padding:16px; font-size:11px; line-height:1.7; }
+.empty a { color:#C9956C; }
 
-.btn {
-  width: 100%;
-  padding: 9px;
-  border-radius: 8px;
-  border: none;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.5px;
-  cursor: pointer;
-  margin-bottom: 6px;
-  text-transform: uppercase;
-}
-.btn-primary { background: linear-gradient(135deg, #7D3C52, #C9956C); color: white; }
-.btn-secondary { background: #F5EBE0; color: #7D3C52; border: 1px solid #E8C4A0; }
+/* Platform knoppen */
+.platform-grid { display:grid; grid-template-columns:1fr 1fr; gap:5px; margin-bottom:6px; }
+.btn { padding:8px 6px; border-radius:8px; border:none; font-size:10px; font-weight:600; letter-spacing:0.5px; cursor:pointer; font-family:'DM Sans',sans-serif; text-transform:uppercase; transition:all 0.2s; display:flex; align-items:center; justify-content:center; gap:4px; }
+.btn-vinted    { background:linear-gradient(135deg,#7D3C52,#C9956C); color:white; }
+.btn-markt     { background:linear-gradient(135deg,#1A5276,#2E86C1); color:white; }
+.btn-facebook  { background:linear-gradient(135deg,#1877F2,#42B0FF); color:white; }
+.btn-ventr     { background:#F5EBE0; color:#7D3C52; border:1px solid #E8C4A0; }
+.btn-secondary { background:#F5EBE0; color:#7D3C52; border:1px solid #E8C4A0; width:100%; margin-top:4px; }
+.btn:hover { opacity:0.9; transform:translateY(-1px); }
 
-.empty { text-align: center; color: #8A7570; padding: 20px; font-size: 12px; line-height: 1.7; }
-.empty a { color: #C9956C; }
-
-.footer { padding: 0 14px 14px; }
+/* Settings */
+.setting-group { margin-bottom:14px; background:white; border:1px solid #E8C4A0; border-radius:8px; padding:12px; }
+.setting-title { font-size:11px; font-weight:600; color:#7D3C52; margin-bottom:8px; display:flex; align-items:center; justify-content:space-between; }
+.setting-row { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; font-size:11px; color:#2C1A14; }
+.setting-row:last-child { margin-bottom:0; }
+input[type="checkbox"] { accent-color:#C9956C; }
+input[type="number"] { width:55px; padding:3px 6px; border:1px solid #D4C8C0; border-radius:5px; font-size:11px; text-align:center; }
+.setting-note { font-size:9px; color:#8A7570; margin-top:6px; line-height:1.4; }
+.save-btn { width:100%; padding:9px; border-radius:8px; border:none; background:linear-gradient(135deg,#7D3C52,#C9956C); color:white; font-size:11px; font-weight:600; letter-spacing:1px; cursor:pointer; font-family:'DM Sans',sans-serif; text-transform:uppercase; margin-top:4px; }
 </style>
 </head>
 <body>
+
 <div class="header">
   <div class="logo"><span class="dot"></span>VENTR</div>
-  <span class="subtitle">CONNECT</span>
+  <span class="subtitle">CONNECT v2</span>
 </div>
-<div class="body">
+
+<!-- TABS -->
+<div class="tabs">
+  <button class="tab-btn active" data-tab="queue">Wachtrij</button>
+  <button class="tab-btn" data-tab="platforms">Platforms</button>
+  <button class="tab-btn" data-tab="settings">Instellingen</button>
+</div>
+
+<!-- TAB: WACHTRIJ -->
+<div class="tab-content" id="tab-queue">
   <div class="stat-row">
-    <div class="stat">
-      <div class="stat-num" id="statPending">0</div>
-      <div class="stat-label">In wachtrij</div>
-    </div>
-    <div class="stat">
-      <div class="stat-num" id="statDone">0</div>
-      <div class="stat-label">Geplaatst</div>
-    </div>
+    <div class="stat"><div class="stat-num" id="statPending">0</div><div class="stat-label">Wachtrij</div></div>
+    <div class="stat"><div class="stat-num" id="statDone">0</div><div class="stat-label">Geplaatst</div></div>
   </div>
   <div id="queueList" class="queue-list"></div>
   <div id="emptyMsg" class="empty" style="display:none">
-    Geen advertenties in wachtrij.<br>
-    Ga naar <a href="https://ventr.nl" target="_blank">ventr.nl</a> om te beginnen 🌸
+    Geen advertenties.<br>Ga naar <a href="https://ventr.nl" target="_blank">ventr.nl</a> 🌸
+  </div>
+  <button class="btn btn-secondary" id="btnClearDone">🗑 Verwijder geplaatste items</button>
+</div>
+
+<!-- TAB: PLATFORMS -->
+<div class="tab-content" id="tab-platforms" style="display:none">
+  <div class="platform-grid">
+    <button class="btn btn-vinted"    id="btnVinted">🌸 Vinted</button>
+    <button class="btn btn-markt"     id="btnMarktplaats">🏠 Marktplaats</button>
+    <button class="btn btn-facebook"  id="btnFacebook">📘 Facebook</button>
+    <button class="btn btn-ventr"     id="btnVentr">✨ VENTR app</button>
+  </div>
+  <div style="background:white;border:1px solid #E8C4A0;border-radius:8px;padding:10px;margin-top:8px">
+    <div style="font-size:10px;font-weight:600;color:#7D3C52;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">🔄 Crosslisting workflow</div>
+    <div style="font-size:10px;color:#8A7570;line-height:1.6">
+      1. Genereer advertenties op ventr.nl<br>
+      2. Klik "In wachtrij" per platform<br>
+      3. Open platform → VENTR panel vult alles in<br>
+      4. Jij klikt alleen "Publiceer" ✅
+    </div>
+  </div>
+  <div style="background:rgba(240,248,255,0.8);border:1px solid #AED6F1;border-radius:8px;padding:10px;margin-top:8px">
+    <div style="font-size:10px;font-weight:600;color:#1A5276;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">📘 Facebook Marketplace</div>
+    <div style="font-size:10px;color:#1A5276;line-height:1.5">
+      Foto's + tekst worden auto-ingevuld.<br>
+      ⚠️ Categorie & locatie handmatig selecteren (Facebook vereiste).
+    </div>
   </div>
 </div>
-<div class="footer">
-  <button class="btn btn-primary" id="btnVinted">Ga naar Vinted → Verkopen</button>
-  <button class="btn btn-secondary" id="btnClearDone">Verwijder geplaatste items</button>
+
+<!-- TAB: INSTELLINGEN -->
+<div class="tab-content" id="tab-settings" style="display:none">
+  <div class="setting-group">
+    <div class="setting-title">
+      ⏰ Piekuur Repost Planner
+      <input type="checkbox" id="repost-enabled">
+    </div>
+    <div style="font-size:10px;color:#8A7570;line-height:1.5">
+      Melding ontvangen tijdens piekuren (18-21u) wanneer items gebumpt kunnen worden.
+    </div>
+  </div>
+
+  <div class="setting-group">
+    <div class="setting-title">
+      💸 Automatische Prijsverlaging
+      <input type="checkbox" id="price-enabled">
+    </div>
+    <div class="setting-row">
+      <span>Na 14 dagen: verlaging</span>
+      <div style="display:flex;align-items:center;gap:4px">
+        <input type="number" id="price-drop14" value="10" min="5" max="50"> %
+      </div>
+    </div>
+    <div class="setting-row">
+      <span>Na 30 dagen: verlaging</span>
+      <div style="display:flex;align-items:center;gap:4px">
+        <input type="number" id="price-drop30" value="15" min="5" max="50"> %
+      </div>
+    </div>
+    <div class="setting-note">Melding elke nacht om 02:00 als items in aanmerking komen.</div>
+  </div>
+
+  <button class="save-btn" id="save-btn">Opslaan</button>
 </div>
+
 <script src="popup.js"></script>
 </body>
 </html>

@@ -11,5 +11,21 @@ window.addEventListener('message', e => {
   });
 });
 
+// Vinted activiteitscheck vanuit background
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg.type === 'VENTR_CHECK_ACTIVITY') {
+    // Lees activiteitsdata van Vinted
+    try {
+      const msgBadge = document.querySelector('[data-testid="inbox-notification"], [class*="unread"]');
+      const unread = msgBadge ? parseInt(msgBadge.textContent) || 1 : 0;
+      sendResponse({ ok: true, data: { newMessages: unread, newOffers: 0, highLikers: [] } });
+      if (unread > 0) {
+        chrome.runtime.sendMessage({ type: 'VENTR_ACTIVITY_UPDATE', data: { newMessages: unread } });
+      }
+    } catch { sendResponse({ ok: false }); }
+    return true;
+  }
+});
+
 // Signaleer aan VENTR dat de extensie actief is
 window.postMessage({ type: 'VENTR_EXTENSION_READY' }, '*');

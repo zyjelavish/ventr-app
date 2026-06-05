@@ -1,15 +1,27 @@
 {
   "manifest_version": 3,
   "name": "VENTR Connect",
-  "version": "1.0.0",
-  "description": "Automatisch Vinted-advertenties plaatsen vanuit VENTR",
-  "permissions": ["storage", "unlimitedStorage", "activeTab", "scripting"],
+  "version": "2.0.0",
+  "description": "AI listing studio — Vinted, Marktplaats & Facebook Marketplace automatisering",
+  "permissions": [
+    "storage",
+    "unlimitedStorage",
+    "activeTab",
+    "scripting",
+    "alarms",
+    "notifications",
+    "tabs",
+    "contextMenus"
+  ],
   "host_permissions": [
     "https://ventr.nl/*",
     "https://www.vinted.nl/*",
     "https://www.vinted.be/*",
     "https://www.vinted.fr/*",
-    "https://www.vinted.com/*"
+    "https://www.vinted.com/*",
+    "https://www.marktplaats.nl/*",
+    "https://www.facebook.com/*",
+    "https://web.facebook.com/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -30,16 +42,27 @@
       "js": ["content-vinted.js"],
       "css": ["panel.css"],
       "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://www.marktplaats.nl/*"],
+      "js": ["content-marktplaats.js"],
+      "css": ["panel.css"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://www.facebook.com/*",
+        "https://web.facebook.com/*"
+      ],
+      "js": ["content-facebook.js"],
+      "css": ["panel.css"],
+      "run_at": "document_idle"
     }
   ],
   "action": {
     "default_popup": "popup.html",
     "default_title": "VENTR Connect",
-    "default_icon": {
-      "48": "icons/icon48.png"
-    }
+    "default_icon": { "48": "icons/icon48.png" }
   },
-  "icons": {
-    "48": "icons/icon48.png"
-  }
+  "icons": { "48": "icons/icon48.png" }
 }

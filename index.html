@@ -2286,6 +2286,25 @@ async function addToQueue(groupId) {
   });
 }
 
+async function crosslistTo(groupId, platform) {
+  const g = state.groups.find(g => g.id === groupId);
+  if (!g?.listing) return;
+  if (!state_ext.ready) { showToast('⚠️ VENTR Connect extensie niet gevonden'); return; }
+
+  const photos = await Promise.all(
+    g.photoIndices.map(i => state.photos[i]).filter(Boolean).map(photoToQueueThumb)
+  );
+  const item = { id: g.id + '-' + platform, listing: g.listing, photos };
+
+  const platformName = { marktplaats: 'Marktplaats 🏠', facebook: 'Facebook 📘' }[platform];
+
+  // Stuur naar wachtrij én open het platform
+  window.postMessage({ type: 'VENTR_ADD_TO_QUEUE', item }, '*');
+  await new Promise(r => setTimeout(r, 300));
+  window.postMessage({ type: `VENTR_OPEN_${platform.toUpperCase()}` }, '*');
+  showToast(`🚀 Opening ${platformName} — VENTR vult automatisch in`);
+}
+
 async function addAllToQueue() {
   if (!state_ext.ready) {
     showToast('⚠️ VENTR Connect extensie niet gevonden');
@@ -2893,7 +2912,9 @@ function renderResults() {
             </div>
           </div>
           <div class="lc-actions">
-            <button class="copy-btn" onclick="addToQueue('${g.id}')" style="background:linear-gradient(135deg,#7D3C52,#C9956C);color:white;border-color:transparent">📥 Wachtrij</button>
+            <button class="copy-btn" onclick="addToQueue('${g.id}')" style="background:linear-gradient(135deg,#7D3C52,#C9956C);color:white;border-color:transparent" title="Vinted wachtrij">🌸 Vinted</button>
+            <button class="copy-btn" onclick="crosslistTo('${g.id}','marktplaats')" style="background:linear-gradient(135deg,#1A5276,#2E86C1);color:white;border-color:transparent" title="Crosslist naar Marktplaats">🏠 Markt</button>
+            <button class="copy-btn" onclick="crosslistTo('${g.id}','facebook')" style="background:linear-gradient(135deg,#1877F2,#42B0FF);color:white;border-color:transparent" title="Crosslist naar Facebook">📘 FB</button>
             <button class="copy-btn" onclick="downloadPhotos('${g.id}')">⬇ Foto's</button>
             <button class="copy-btn" onclick="copyListing('${g.id}')">📋 Tekst</button>
           </div>
