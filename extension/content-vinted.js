@@ -59,11 +59,37 @@
   }
 
   function loadQueue() {
-    chrome.runtime.sendMessage({ type: 'VENTR_GET_QUEUE' }, res => {
-      if (chrome.runtime.lastError) return;
-      queue = (res?.queue || []).filter(q => q.status === 'pending');
-      updatePanel();
-    });
+    try {
+      chrome.runtime.sendMessage({ type: 'VENTR_GET_QUEUE' }, res => {
+        if (chrome.runtime.lastError) {
+          showContextInvalidatedWarning();
+          return;
+        }
+        queue = (res?.queue || []).filter(q => q.status === 'pending');
+        updatePanel();
+      });
+    } catch (e) {
+      if (e.message?.includes('Extension context')) showContextInvalidatedWarning();
+    }
+  }
+
+  function showContextInvalidatedWarning() {
+    setStatus('🔄 Extensie herladen — vernieuw deze pagina (F5)', 'warn');
+    const list = document.getElementById('ventr-list');
+    if (list) list.innerHTML = `
+      <div style="text-align:center;padding:14px 10px">
+        <div style="font-size:22px;margin-bottom:8px">🔄</div>
+        <div style="font-size:11px;color:#7D3C52;font-weight:600;margin-bottom:4px">Extensie is herladen</div>
+        <div style="font-size:10px;color:#8A7570;line-height:1.5;margin-bottom:10px">
+          Druk <b>F5</b> om deze pagina te vernieuwen.<br>
+          Je wachtrij blijft bewaard.
+        </div>
+        <button onclick="location.reload()" style="background:linear-gradient(135deg,#7D3C52,#C9956C);color:white;border:none;border-radius:8px;padding:8px 16px;font-size:11px;font-weight:600;cursor:pointer;font-family:DM Sans,sans-serif">
+          🔄 Vernieuw pagina
+        </button>
+      </div>`;
+    const empty = document.getElementById('ventr-empty');
+    if (empty) empty.style.display = 'none';
   }
 
   function updatePanel() {
@@ -153,7 +179,7 @@
       await sleep(600);
 
       setStatus('✅ Klaar! Controleer en klik Publiceer 🎉', 'success');
-      chrome.runtime.sendMessage({ type: 'VENTR_MARK_DONE', id: item.id });
+      try { chrome.runtime.sendMessage({ type: 'VENTR_MARK_DONE', id: item.id }); } catch {}
 
     } catch (err) {
       setStatus('❌ ' + err.message, 'error');
