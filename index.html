@@ -1694,11 +1694,23 @@ function readFile(file) {
             im.onerror = fail;
             im.src = raw;
           });
-          // Roteer op basis van EXIF
+          // Stap 1: EXIF rotatie op volledige resolutie (snel)
           let canvas = applyExifRotation(img, orientation);
-          // Pas VENTR filter toe als optie aan staat
+
+          // Stap 2: Eerst verkleinen naar max 1200px (VOOR filter — veel sneller!)
+          const MAX_PREVIEW = 1200;
+          const scale = Math.min(MAX_PREVIEW / canvas.width, MAX_PREVIEW / canvas.height, 1);
+          if (scale < 1) {
+            const resized = document.createElement('canvas');
+            resized.width  = Math.round(canvas.width  * scale);
+            resized.height = Math.round(canvas.height * scale);
+            resized.getContext('2d').drawImage(canvas, 0, 0, resized.width, resized.height);
+            canvas = resized;
+          }
+
+          // Stap 3: VENTR filter op verkleinde afbeelding (~16x sneller)
           if (state.filterEnabled) applyVentrFilter(canvas);
-          const enhanced = canvas.toDataURL('image/jpeg', 0.92);
+          const enhanced = canvas.toDataURL('image/jpeg', 0.88);
           res({ id: uid(), preview: enhanced, base64: enhanced.split(',')[1], mediaType: 'image/jpeg' });
         } catch {
           res({ id: uid(), preview: raw, base64: raw.split(',')[1], mediaType });
@@ -1835,13 +1847,19 @@ async function handleFiles(files) {
     arr.splice(remaining);
   }
 
-  showToast(`📸 ${arr.length} foto's laden...`);
-  // Verwerk in kleine batches zodat browser niet vastloopt
+  showToast(`📸 ${arr.length} foto's verwerken...`);
+
+  // Verwerk één voor één met voortgangsindicatie
   const newPhotos = [];
-  for (let i = 0; i < arr.length; i += 5) {
-    const batch = await Promise.all(arr.slice(i, i+5).map(readFile));
-    newPhotos.push(...batch);
+  for (let i = 0; i < arr.length; i++) {
+    // Update dropzone tekst met voortgang
+    const dropTitle = document.getElementById('dropTitle');
+    if (dropTitle) dropTitle.textContent = `Verwerken ${i+1}/${arr.length}...`;
+    const photo = await readFile(arr[i]);
+    newPhotos.push(photo);
   }
+  const dropTitle = document.getElementById('dropTitle');
+  if (dropTitle) dropTitle.textContent = "Foto's uploaden";
   state.photos = [...state.photos, ...newPhotos];
   state.phase = 'upload';
   state.groups = [];
@@ -1906,9 +1924,12 @@ async function startGrouping() {
     let allGroups = [];
     let offset = 0;
 
+    const startTime = Date.now();
     for (let ci = 0; ci < chunks.length; ci++) {
       const chunk = chunks[ci];
-      state.groupingProgress = `Batch ${ci + 1} van ${chunks.length} groeperen...`;
+      const elapsed = Math.round((Date.now() - startTime) / 1000);
+      const eta = ci > 0 ? Math.round((elapsed / ci) * (chunks.length - ci)) : '...';
+      state.groupingProgress = `Batch ${ci + 1} van ${chunks.length} — ${chunk.photos.length} foto's analyseren${eta !== '...' ? ` (~${eta}s)` : ''}`;
       renderMain();
 
       const localCount = chunk.photos.length;
