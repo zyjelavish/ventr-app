@@ -1786,11 +1786,11 @@ function parseJSON(text) {
   return JSON.parse(match ? match[0] : clean);
 }
 
-function showToast(msg) {
+function showToast(msg, duur = 2500) {
   const t = document.getElementById('toast');
   t.textContent = msg;
   t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 2500);
+  setTimeout(() => t.classList.remove('show'), duur);
 }
 
 function copyText(text) {
@@ -2105,20 +2105,21 @@ async function rewriteWithAI(groupId) {
   if (!correction) { showToast('Typ eerst een correctie'); return; }
 
   const btn = document.getElementById(`rewrite-btn-${groupId}`);
-  if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
+  const errEl = document.getElementById(`rewrite-err-${groupId}`);
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Genereren...'; }
+  if (errEl) errEl.style.display = 'none';
 
   try {
     const gPhotos = g.photoIndices.map(i => state.photos[i]).filter(Boolean);
-    const resized  = await Promise.all(gPhotos.map(p => resizeForGeneration(p.base64, p.mediaType)));
+    // Gebruik kleinere foto's voor hertekst — sneller en minder tokens
+    const resized = await Promise.all(gPhotos.map(p => resizeImage(p.base64, p.mediaType, 800, 0.80)));
 
-    const correctionPrompt = `CORRECTIE VAN DE GEBRUIKER: "${correction}"
+    const correctionPrompt = `GEBRUIKERSCORRECTIE: "${correction}"
 
-De vorige advertentie was incorrect. Genereer een volledig nieuwe advertentie met deze correctie in acht genomen.
-Huidige (foutieve) advertentie ter referentie:
-Titel: ${g.listing.titel}
-Beschrijving: ${g.listing.beschrijving}
+Pas de advertentie aan op basis van deze correctie.
+Huidige advertentie: Titel="${g.listing.titel}", Staat="${g.listing.staat}", Maat="${g.listing.maat}"
 
-Analyseer de foto's opnieuw met de correctie in gedachten en genereer een verbeterde advertentie.`;
+Genereer een volledig nieuwe, verbeterde advertentie. Antwoord UITSLUITEND als JSON.`;
 
     const content = [
       ...resized.map(r => ({ type: 'image', source: { type: 'base64', media_type: r.mediaType, data: r.base64 } })),
@@ -2129,8 +2130,6 @@ Analyseer de foto's opnieuw met de correctie in gedachten en genereer een verbet
     const newListing = parseJSON(text);
     g.listing = newListing;
     g.status = 'done';
-
-    // Update catalogus
     autoSaveToCalog(g);
 
     if (inputEl) inputEl.value = '';
@@ -2140,10 +2139,25 @@ Analyseer de foto's opnieuw met de correctie in gedachten en genereer een verbet
     showToast('✨ Advertentie bijgewerkt!');
     renderMain();
   } catch (err) {
-    showToast('❌ Hertekst mislukt: ' + err.message);
+    // Toon volledige fout leesbaar onder de knop
+    const msg = err.message || 'Onbekende fout';
+    if (errEl) {
+      errEl.textContent = '❌ ' + msg;
+      errEl.style.display = 'block';
+    }
+    // Specifieke uitleg bij bekende fouten
+    if (msg.includes('credit') || msg.includes('usage') || msg.includes('billing')) {
+      showToast('💳 API-tegoed op — check console.anthropic.com', 6000);
+    } else if (msg.includes('rate') || msg.includes('429')) {
+      showToast('⏱️ Te veel verzoeken — wacht 30 seconden en probeer opnieuw', 6000);
+    } else if (msg.includes('overload') || msg.includes('529')) {
+      showToast('🔄 Anthropic server druk — probeer over een minuut opnieuw', 6000);
+    } else {
+      showToast('❌ Fout: ' + msg.slice(0, 80), 6000);
+    }
   }
 
-  if (btn) { btn.disabled = false; btn.textContent = '✨ Genereer'; }
+  if (btn) { btn.disabled = false; btn.textContent = '✨ Genereer opnieuw'; }
 }
 
 function updateListing(groupId, field, value) {
@@ -3159,6 +3173,7 @@ function renderResults() {
                 class="btn-sm btn-confirm" style="width:100%;padding:8px">
                 ✨ Genereer opnieuw
               </button>
+              <div id="rewrite-err-${g.id}" style="display:none;margin-top:8px;padding:8px;background:#FDEAEA;border-radius:6px;font-size:11px;color:#8A0000;line-height:1.5;word-break:break-word"></div>
             </div>
           </div>
         </div>
